@@ -1,6 +1,271 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, ArrowRight } from 'lucide-react';
-import { apiService, LoginRequest } from '../services/api.ts';
+import { Eye, EyeOff, ArrowRight, Wifi, WifiOff } from 'lucide-react';
+
+// Interfaces definidas directamente en el componente
+interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+interface User {
+  id: string;
+  username: string;
+  email?: string;
+  role?: string;
+}
+
+interface LoginResponse {
+  success: boolean;
+  token?: string;
+  message?: string;
+  user?: User;
+}
+
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+// Servicio API simplificado y mejorado
+const createApiService = () => {
+  const API_BASE_URL = 'http://34.10.172.54:8080';
+
+  // Función para obtener token 
+  const getAuthToken = (): string | null => {
+    
+    return null;
+  };
+
+  const getHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Cache-Control': 'no-cache',
+    };
+
+    const token = getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
+  };
+
+  const healthCheck = async (): Promise<ApiResponse<any>> => {
+    try {
+      console.log('🏥 Verificando salud del servidor...');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // Reducido a 3 segundos
+
+      try {
+        const response = await fetch(API_BASE_URL, {
+          method: 'HEAD', 
+          signal: controller.signal,
+          headers: { 
+            'Accept': '*/*',
+            'Cache-Control': 'no-cache'
+          },
+        });
+        
+        clearTimeout(timeoutId);
+        console.log(`✅ Servidor respondió con status: ${response.status}`);
+        
+        return {
+          success: true,
+          message: 'Servidor disponible',
+          data: { status: 'ok', timestamp: new Date().toISOString() }
+        };
+        
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
+      
+    } catch (error) {
+      console.error('❌ Error en health check:', error);
+      
+      let errorMessage = 'No se pudo conectar con el servidor';
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        errorMessage = 'Timeout de conexión';
+      } else if (error instanceof TypeError) {
+        errorMessage = 'Error de red o CORS';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage,
+        message: 'Servidor no disponible'
+      };
+    }
+  };
+
+  const login = async (credentials: LoginRequest): Promise<LoginResponse> => {
+    try {
+      console.log('🔐 Intentando login con:', credentials.username);
+      
+      // Validaciones básicas
+      if (!credentials.username?.trim() || !credentials.password?.trim()) {
+        return {
+          success: false,
+          message: 'Usuario y contraseña son requeridos'
+        };
+      }
+
+      const endpoints = [
+        '/api/auth/login',
+        '/auth/login', 
+        '/login',
+        '/api/login',
+        '/api/v1/auth/login'
+      ];
+      
+      let lastError = '';
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`🎯 Probando endpoint: ${API_BASE_URL}${endpoint}`);
+          
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos
+          
+          const requestBody = JSON.stringify({
+            username: credentials.username.trim(),
+            password: credentials.password.trim()
+          });
+          
+          console.log('📦 Request body:', requestBody);
+          
+          const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: requestBody,
+            signal: controller.signal,
+            mode: 'cors', 
+          });
+
+          clearTimeout(timeoutId);
+          console.log(`📡 ${endpoint} respondió con status: ${response.status}`);
+          console.log(`📋 Response headers:`, Object.fromEntries(response.headers.entries()));
+
+       
+          if (response.status === 404 || response.status === 405) {
+            console.log(`⏭️ ${endpoint} no disponible, probando siguiente...`);
+            continue;
+          }
+
+          let data: any = {};
+          const contentType = response.headers.get('content-type') || '';
+          
+          try {
+            const responseText = await response.text();
+            console.log(`📄 Response text (${responseText.length} chars):`, responseText.substring(0, 500));
+            
+            if (responseText.trim()) {
+              if (contentType.includes('application/json') || 
+                  responseText.trim().startsWith('{') || 
+                  responseText.trim().startsWith('[')) {
+                data = JSON.parse(responseText);
+              } else {
+                data = { message: responseText };
+              }
+            } else {
+              data = { message: 'Respuesta vacía del servidor' };
+            }
+          } catch (parseError) {
+            console.error('❌ Error parseando respuesta:', parseError);
+            data = { message: 'Error al procesar respuesta del servidor' };
+          }
+
+          console.log('📊 Datos procesados:', data);
+          
+          if (response.ok && (response.status >= 200 && response.status < 300)) {
+            console.log('✅ Login exitoso!');
+            
+            // Buscar token en diferentes posibles ubicaciones
+            const token = data.token || 
+                         data.accessToken || 
+                         data.access_token || 
+                         data.authToken ||
+                         data.jwt ||
+                         response.headers.get('Authorization') ||
+                         response.headers.get('X-Auth-Token');
+            
+            const user = data.user || data.userData || {
+              id: data.id || data.userId || Date.now().toString(),
+              username: credentials.username,
+              email: data.email || `${credentials.username}@ibarra.gob.ec`,
+              role: data.role || 'user'
+            };
+            
+            return {
+              success: true,
+              token: token,
+              user: user,
+              message: data.message || 'Autenticación exitosa',
+            };
+          } else {
+            const errorMessage = data.message || data.error || `Error HTTP ${response.status}`;
+            console.log(`❌ Login falló: ${errorMessage}`);
+            lastError = errorMessage;
+            
+            // Si es error de credenciales, no seguir probando
+            if (response.status === 401 || response.status === 403) {
+              return {
+                success: false,
+                message: 'Credenciales incorrectas. Verifique su usuario y contraseña.',
+              };
+            }
+            
+            // Para errores del servidor, seguir con el siguiente endpoint
+            if (response.status >= 500) {
+              console.log(`🔄 Error del servidor ${response.status}, probando siguiente...`);
+              continue;
+            }
+            
+            // Para otros errores, también devolver inmediatamente
+            return {
+              success: false,
+              message: errorMessage,
+            };
+          }
+          
+        } catch (endpointError) {
+          console.error(`💥 Error con endpoint ${endpoint}:`, endpointError);
+          
+          if (endpointError instanceof DOMException && endpointError.name === 'AbortError') {
+            lastError = 'Timeout de conexión';
+          } else if (endpointError instanceof TypeError) {
+            lastError = 'Error de red o CORS';
+          } else {
+            lastError = endpointError instanceof Error ? endpointError.message : 'Error desconocido';
+          }
+          
+          continue;
+        }
+      }
+      
+      return {
+        success: false,
+        message: lastError || 'No se encontró un endpoint de login funcional',
+      };
+      
+    } catch (error) {
+      console.error('💥 Error general de login:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error de conexión con el servidor',
+      };
+    }
+  };
+
+  return { healthCheck, login };
+};
+
+// Crear instancia del servicio API
+const apiService = createApiService();
 
 interface LoginPageProps {
   onLogin: (success: boolean, token?: string) => void;
@@ -13,6 +278,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [currentQuote, setCurrentQuote] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [serverStatus, setServerStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
   const quotes = [
     "Ibarra es el alma de la Sierra Norte; su historia es ejemplo de resurgimiento - Benjamín Carrión",
@@ -34,23 +300,36 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     return () => clearInterval(interval);
   }, [quotes.length]);
 
-  // Verificar conexión con el servidor al cargar el componente
+  // Verificar conexión con el servidor
   useEffect(() => {
     const checkServerConnection = async () => {
       try {
-        console.log('Verificando conexión con el servidor...');
+        console.log('🔍 Verificando conexión con el servidor...');
+        setServerStatus('checking');
+        
         const healthCheck = await apiService.healthCheck();
+        
         if (healthCheck.success) {
           console.log('✅ Servidor conectado');
+          setServerStatus('connected');
+          setError(''); // Limpiar errores previos
         } else {
-          console.warn('⚠️ Servidor no responde correctamente:', healthCheck.message);
+          console.warn('⚠️ Servidor no disponible:', healthCheck.message);
+          setServerStatus('disconnected');
+          setError(healthCheck.error || 'Servidor no disponible');
         }
       } catch (error) {
         console.error('❌ Error verificando servidor:', error);
+        setServerStatus('disconnected');
+        setError('Error verificando conexión con el servidor');
       }
     };
 
     checkServerConnection();
+    
+    // Verificar cada 15 segundos en lugar de 30
+    const interval = setInterval(checkServerConnection, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleImageError = (event: React.SyntheticEvent<HTMLImageElement, Event>): void => {
@@ -69,7 +348,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         password: password.trim()
       };
 
-      // Validación básica
+      // Validaciones del lado del cliente
       if (!credentials.username || !credentials.password) {
         setError('Por favor, complete todos los campos');
         setIsLoading(false);
@@ -77,54 +356,52 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         return;
       }
 
-      console.log('🔐 Intentando login...');
-      console.log('📧 Usuario:', credentials.username);
-      console.log('🔗 API Service:', apiService);
-      console.log('🔗 Login method exists:', typeof apiService.login === 'function');
-
-      // Verificar que apiService y login existen
-      if (!apiService || typeof apiService.login !== 'function') {
-        console.error('❌ apiService.login no es una función:', apiService);
-        setError('Error interno: Servicio de autenticación no disponible');
+      if (credentials.username.length < 3) {
+        setError('El usuario debe tener al menos 3 caracteres');
         setIsLoading(false);
         onLogin(false);
         return;
       }
 
-      // Llamada a la API
+      if (credentials.password.length < 4) {
+        setError('La contraseña debe tener al menos 4 caracteres');
+        setIsLoading(false);
+        onLogin(false);
+        return;
+      }
+
+      if (serverStatus === 'disconnected') {
+        setError('No hay conexión con el servidor. Verifique el estado de la red.');
+        setIsLoading(false);
+        onLogin(false);
+        return;
+      }
+
+      console.log('🔐 Iniciando proceso de login...');
+      console.log('📧 Usuario:', credentials.username);
+
       const response = await apiService.login(credentials);
-      
       console.log('📝 Respuesta del login:', response);
       
-      if (response.success && response.token) {
+      if (response.success) {
         console.log('✅ Login exitoso');
-        
-        // Guardar token en localStorage
-        if (typeof window !== 'undefined' && window.localStorage) {
-          localStorage.setItem('authToken', response.token);
-          
-          // Guardar datos del usuario si existen
-          if (response.user) {
-            localStorage.setItem('userData', JSON.stringify(response.user));
-          }
-        }
+
         
         onLogin(true, response.token);
       } else {
         console.log('❌ Login fallido:', response.message);
-        setError(response.message || 'Credenciales incorrectas');
+        setError(response.message || 'Error en el proceso de autenticación');
         onLogin(false);
       }
     } catch (error) {
       console.error('💥 Error durante login:', error);
-      console.error('💥 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       
-      // Error más específico
       if (error instanceof Error) {
-        if (error.message.includes('fetch')) {
+        if (error.message.includes('fetch') || error.message.includes('network')) {
           setError('Error de conexión. Verifique que el servidor esté disponible.');
-        } else if (error.message.includes('JSON')) {
-          setError('Error procesando respuesta del servidor.');
+          setServerStatus('disconnected');
+        } else if (error.message.includes('timeout') || error.message.includes('AbortError')) {
+          setError('La conexión tardó demasiado tiempo. Intente nuevamente.');
         } else {
           setError(`Error: ${error.message}`);
         }
@@ -135,6 +412,51 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       onLogin(false);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (serverStatus) {
+      case 'connected': return 'text-green-500';
+      case 'disconnected': return 'text-red-500';
+      case 'checking': default: return 'text-yellow-500';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (serverStatus) {
+      case 'connected': return 'Servidor conectado';
+      case 'disconnected': return 'Servidor desconectado';
+      case 'checking': default: return 'Verificando conexión...';
+    }
+  };
+
+  const getStatusIcon = () => {
+    switch (serverStatus) {
+      case 'connected': return <Wifi size={16} className="text-green-500" />;
+      case 'disconnected': return <WifiOff size={16} className="text-red-500" />;
+      case 'checking': default: 
+        return <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-500"></div>;
+    }
+  };
+
+  const handleRetryConnection = async () => {
+    setServerStatus('checking');
+    setError('');
+    
+    try {
+      const healthCheck = await apiService.healthCheck();
+      
+      if (healthCheck.success) {
+        setServerStatus('connected');
+        setError('');
+      } else {
+        setServerStatus('disconnected');
+        setError(healthCheck.error || 'No se pudo conectar con el servidor');
+      }
+    } catch (error) {
+      setServerStatus('disconnected');
+      setError('Error al reintentar la conexión');
     }
   };
 
@@ -154,8 +476,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           {/* Borde superior decorativo */}
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-slate-400 via-gray-500 to-slate-600"></div>
           
+          {/* Indicador de estado del servidor */}
+          <div className="absolute top-4 right-4 flex items-center space-x-2 bg-white/60 backdrop-blur-sm rounded-full px-3 py-1">
+            {getStatusIcon()}
+            <span className={`text-xs font-medium ${getStatusColor()}`}>
+              {serverStatus === 'checking' ? '...' : serverStatus === 'connected' ? '●' : '●'}
+            </span>
+          </div>
+          
           {/* Elementos decorativos internos */}
-          <div className="absolute top-4 right-4 w-16 h-16 bg-gradient-to-br from-slate-200/30 to-gray-300/20 rounded-full blur-sm"></div>
           <div className="absolute bottom-4 left-4 w-12 h-12 bg-gradient-to-tr from-white/40 to-slate-100/30 rounded-full blur-sm"></div>
           
           {/* Logo y encabezado */}
@@ -180,6 +509,27 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </p>
           </div>
 
+          {/* Estado de conexión detallado */}
+          <div className="mb-4 p-3 bg-white/50 rounded-lg border border-white/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                {getStatusIcon()}
+                <span className={`text-sm font-medium ${getStatusColor()}`}>
+                  {getStatusText()}
+                </span>
+              </div>
+              {serverStatus === 'disconnected' && (
+                <button
+                  onClick={handleRetryConnection}
+                  className="text-xs text-slate-600 hover:text-slate-800 underline transition-colors"
+                  disabled={isLoading}
+                >
+                  Reintentar
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Frase rotativa */}
           <div className="mb-6 h-12 flex items-center justify-center relative">
             <div className="absolute inset-0 bg-gradient-to-r from-slate-50/50 via-white/30 to-slate-50/50 rounded-lg"></div>
@@ -191,7 +541,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           {/* Mensaje de error */}
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 text-sm rounded-lg relative z-10 animate-shake">
-              {error}
+              <div className="flex items-start space-x-2">
+                <div className="text-red-500 mt-0.5">⚠️</div>
+                <div className="flex-1">{error}</div>
+              </div>
             </div>
           )}
 
@@ -212,6 +565,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   required
                   disabled={isLoading}
                   autoComplete="username"
+                  minLength={3}
                 />
               </div>
               
@@ -229,6 +583,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   required
                   disabled={isLoading}
                   autoComplete="current-password"
+                  minLength={4}
                 />
                 <button
                   type="button"
@@ -244,13 +599,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || serverStatus === 'disconnected'}
               className="w-full bg-gradient-to-r from-slate-600 via-gray-700 to-slate-800 text-white py-3 rounded-xl font-semibold hover:from-slate-700 hover:via-gray-800 hover:to-slate-900 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
             >
               {isLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   <span>Ingresando...</span>
+                </>
+              ) : serverStatus === 'disconnected' ? (
+                <>
+                  <WifiOff size={20} />
+                  <span>Sin conexión</span>
                 </>
               ) : (
                 <>
@@ -266,7 +626,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               © 2025 GAD Municipal de Ibarra
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Versión 1.0.0
+              Versión 1.0.2
             </p>
           </div>
         </div>
