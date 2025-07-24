@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, TrendingUp, MapPin, Calendar, Award, Store, FileText, MessageSquare } from 'lucide-react';
+import { Users, TrendingUp, MapPin, Calendar, Award, Store, FileText, MessageSquare } from 'lucide-react';
 
 const Home: React.FC = () => {
   const [currentQuote, setCurrentQuote] = useState(0);

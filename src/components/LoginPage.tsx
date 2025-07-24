@@ -21,7 +21,7 @@ interface LoginResponse {
   user?: User;
 }
 
-interface ApiResponse<T = unknown> {
+interface ApiResponse<T = Record<string, unknown>> {
   success: boolean;
   data?: T;
   message?: string;
@@ -53,7 +53,7 @@ const createApiService = () => {
     return headers;
   };
 
-  const healthCheck = async (): Promise<ApiResponse<any>> => {
+  const healthCheck = async (): Promise<ApiResponse<Record<string, unknown>>> => {
     try {
       console.log('🏥 Verificando salud del servidor...');
       
@@ -156,7 +156,7 @@ const createApiService = () => {
             continue;
           }
 
-          let data: any = {};
+          let data: Record<string, unknown> = {};
           const contentType = response.headers.get('content-type') || '';
           
           try {
@@ -185,29 +185,35 @@ const createApiService = () => {
             console.log('✅ Login exitoso!');
             
             // Buscar token en diferentes posibles ubicaciones
-            const token = data.token || 
+            const token = (data.token || 
                          data.accessToken || 
                          data.access_token || 
                          data.authToken ||
                          data.jwt ||
                          response.headers.get('Authorization') ||
-                         response.headers.get('X-Auth-Token');
+                         response.headers.get('X-Auth-Token')) as string | undefined;
             
-            const user = data.user || data.userData || {
-              id: data.id || data.userId || Date.now().toString(),
+            const userData = (data.user || data.userData) as Record<string, unknown> | undefined;
+            const user: User = userData ? {
+              id: (userData.id as string) || Date.now().toString(),
+              username: (userData.username as string) || credentials.username,
+              email: (userData.email as string) || `${credentials.username}@ibarra.gob.ec`,
+              role: (userData.role as string) || 'user'
+            } : {
+              id: (data.id || data.userId || Date.now().toString()) as string,
               username: credentials.username,
-              email: data.email || `${credentials.username}@ibarra.gob.ec`,
-              role: data.role || 'user'
+              email: (data.email as string) || `${credentials.username}@ibarra.gob.ec`,
+              role: (data.role as string) || 'user'
             };
             
             return {
               success: true,
               token: token,
               user: user,
-              message: data.message || 'Autenticación exitosa',
+              message: (data.message as string) || 'Autenticación exitosa',
             };
           } else {
-            const errorMessage = data.message || data.error || `Error HTTP ${response.status}`;
+            const errorMessage = (data.message || data.error || `Error HTTP ${response.status}`) as string;
             console.log(`❌ Login falló: ${errorMessage}`);
             lastError = errorMessage;
             
@@ -252,11 +258,11 @@ const createApiService = () => {
         message: lastError || 'No se encontró un endpoint de login funcional',
       };
       
-    } catch (error) {
-      console.error('💥 Error general de login:', error);
+    } catch (loginError) {
+      console.error('💥 Error general de login:', loginError);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Error de conexión con el servidor',
+        message: loginError instanceof Error ? loginError.message : 'Error de conexión con el servidor',
       };
     }
   };
@@ -318,8 +324,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           setServerStatus('disconnected');
           setError(healthCheck.error || 'Servidor no disponible');
         }
-      } catch (error) {
-        console.error('❌ Error verificando servidor:', error);
+      } catch (err) {
+        console.error('❌ Error verificando servidor:', err);
         setServerStatus('disconnected');
         setError('Error verificando conexión con el servidor');
       }
@@ -393,17 +399,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         setError(response.message || 'Error en el proceso de autenticación');
         onLogin(false);
       }
-    } catch (error) {
-      console.error('💥 Error durante login:', error);
+    } catch (err) {
+      console.error('💥 Error durante login:', err);
       
-      if (error instanceof Error) {
-        if (error.message.includes('fetch') || error.message.includes('network')) {
+      if (err instanceof Error) {
+        if (err.message.includes('fetch') || err.message.includes('network')) {
           setError('Error de conexión. Verifique que el servidor esté disponible.');
           setServerStatus('disconnected');
-        } else if (error.message.includes('timeout') || error.message.includes('AbortError')) {
+        } else if (err.message.includes('timeout') || err.message.includes('AbortError')) {
           setError('La conexión tardó demasiado tiempo. Intente nuevamente.');
         } else {
-          setError(`Error: ${error.message}`);
+          setError(`Error: ${err.message}`);
         }
       } else {
         setError('Error desconocido durante el login');
@@ -454,7 +460,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         setServerStatus('disconnected');
         setError(healthCheck.error || 'No se pudo conectar con el servidor');
       }
-    } catch (error) {
+    } catch (retryError) {
+      console.error('Error al reintentar conexión:', retryError);
       setServerStatus('disconnected');
       setError('Error al reintentar la conexión');
     }
