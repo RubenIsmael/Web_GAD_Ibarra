@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Send, User, Clock, Search, Filter } from 'lucide-react';
+import { MessageSquare, Send, Clock, Search } from 'lucide-react';
 
 const Mensajeria: React.FC = () => {
   const [selectedConversation, setSelectedConversation] = useState<number | null>(1);

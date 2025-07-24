@@ -160,6 +160,16 @@ export interface HealthCheckResponse {
   database?: string;
 }
 
+// Interfaz para respuestas de servidor genéricas
+interface ServerResponse {
+  message?: string;
+  error?: string;
+  detail?: string;
+  type?: string;
+  rawResponse?: string;
+  [key: string]: unknown;
+}
+
 // Clase mejorada para manejar las peticiones a la API
 class ApiService {
   private baseUrl: string;
@@ -173,20 +183,17 @@ class ApiService {
 
   // Método para cargar el token de autenticación 
   private loadAuthToken(): void {
-
     this.authToken = null;
   }
 
   // Método para guardar el token de autenticación
   private saveAuthToken(token: string): void {
     this.authToken = token;
-   
   }
 
   // Método para limpiar el token de autenticación
   private clearAuthToken(): void {
     this.authToken = null;
-
   }
 
   // Método para obtener el token de autenticación
@@ -248,8 +255,8 @@ class ApiService {
       this.isServerAvailable = false;
       return false;
       
-    } catch (error) {
-      console.error('❌ Error conectando al servidor base:', error);
+    } catch {
+      console.error('❌ Error conectando al servidor base');
       this.isServerAvailable = false;
       return false;
     }
@@ -302,7 +309,7 @@ class ApiService {
       console.log(`📏 Content-Length: ${contentLength}`);
       
       // Manejo mejorado de diferentes tipos de respuesta
-      let data: any = null;
+      let data: ServerResponse | null = null;
       
       try {
         const responseText = await response.text();
@@ -313,7 +320,7 @@ class ApiService {
               responseText.trim().startsWith('{') || 
               responseText.trim().startsWith('[')) {
             try {
-              data = JSON.parse(responseText);
+              data = JSON.parse(responseText) as ServerResponse;
               console.log('📊 JSON parseado exitosamente');
             } catch (parseError) {
               console.error('❌ Error parseando JSON:', parseError);
@@ -343,7 +350,7 @@ class ApiService {
         console.log('✅ Petición exitosa');
         return {
           success: true,
-          data,
+          data: data as T,
           message: data?.message || 'Operación exitosa',
           status: response.status,
         };
@@ -543,7 +550,7 @@ class ApiService {
           validEndpointFound = true;
 
           // Leer respuesta
-          let responseData: any = {};
+          let responseData: ServerResponse = {};
           const contentType = response.headers.get('content-type') || '';
           
           try {
@@ -554,13 +561,13 @@ class ApiService {
               if (contentType.includes('application/json') || 
                   responseText.trim().startsWith('{') || 
                   responseText.trim().startsWith('[')) {
-                responseData = JSON.parse(responseText);
+                responseData = JSON.parse(responseText) as ServerResponse;
               } else {
                 responseData = { message: responseText };
               }
             }
-          } catch (parseError) {
-            console.error('❌ Error parseando respuesta:', parseError);
+          } catch {
+            console.error('❌ Error parseando respuesta');
             responseData = { message: 'Error al procesar respuesta del servidor' };
           }
 
@@ -571,37 +578,38 @@ class ApiService {
             console.log('✅ Login exitoso!');
             
             // Buscar token en múltiples ubicaciones posibles
-            const token = responseData.token || 
-                         responseData.accessToken || 
-                         responseData.access_token || 
-                         responseData.authToken ||
-                         responseData.jwt ||
-                         responseData.sessionToken ||
+            const token = (responseData as Record<string, unknown>).token as string || 
+                         (responseData as Record<string, unknown>).accessToken as string || 
+                         (responseData as Record<string, unknown>).access_token as string || 
+                         (responseData as Record<string, unknown>).authToken as string ||
+                         (responseData as Record<string, unknown>).jwt as string ||
+                         (responseData as Record<string, unknown>).sessionToken as string ||
                          response.headers.get('Authorization')?.replace('Bearer ', '') ||
                          response.headers.get('X-Auth-Token');
             
             // Construir objeto de usuario
+            const userObj = (responseData as Record<string, unknown>).user as Record<string, unknown> || {};
             const user: User = {
-              id: responseData.id || 
-                  responseData.userId || 
-                  responseData.user?.id || 
-                  Date.now().toString(),
-              username: responseData.username || 
-                       responseData.user?.username || 
-                       credentials.username,
-              email: responseData.email || 
-                     responseData.user?.email || 
-                     `${credentials.username}@ibarra.gob.ec`,
-              role: responseData.role || 
-                    responseData.user?.role || 
-                    responseData.authorities?.[0] || 
-                    'user',
-              firstName: responseData.firstName || 
-                        responseData.user?.firstName || 
-                        responseData.nombre,
-              lastName: responseData.lastName || 
-                       responseData.user?.lastName || 
-                       responseData.apellido,
+              id: ((responseData as Record<string, unknown>).id || 
+                  (responseData as Record<string, unknown>).userId || 
+                  userObj.id || 
+                  Date.now().toString()) as string,
+              username: ((responseData as Record<string, unknown>).username || 
+                       userObj.username || 
+                       credentials.username) as string,
+              email: ((responseData as Record<string, unknown>).email || 
+                     userObj.email || 
+                     `${credentials.username}@ibarra.gob.ec`) as string,
+              role: ((responseData as Record<string, unknown>).role || 
+                    userObj.role || 
+                    ((responseData as Record<string, unknown>).authorities as string[])?.[0] || 
+                    'user') as string,
+              firstName: ((responseData as Record<string, unknown>).firstName || 
+                        userObj.firstName || 
+                        (responseData as Record<string, unknown>).nombre) as string,
+              lastName: ((responseData as Record<string, unknown>).lastName || 
+                       userObj.lastName || 
+                       (responseData as Record<string, unknown>).apellido) as string,
             };
             
             // Guardar token si existe
@@ -611,7 +619,7 @@ class ApiService {
             
             return {
               success: true,
-              token: token,
+             token: token || undefined,
               user: user,
               message: responseData.message || 'Autenticación exitosa',
             };
@@ -688,11 +696,11 @@ class ApiService {
         message: lastError || 'Error en el proceso de autenticación',
       };
       
-    } catch (error) {
-      console.error('💥 Error general de login:', error);
+    } catch {
+      console.error('💥 Error general de login');
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Error de conexión con el servidor',
+        message: 'Error de conexión con el servidor',
       };
     }
   }
@@ -708,7 +716,7 @@ class ApiService {
       this.clearAuthToken();
       
       return result;
-    } catch (error) {
+    } catch {
       // Limpiar token incluso si hay error
       this.clearAuthToken();
       
@@ -793,8 +801,8 @@ class ApiService {
             }
           };
         }
-      } catch (error) {
-        console.log(`❌ Health check falló en: ${endpoint}`, error);
+      } catch {
+        console.log(`❌ Health check falló en: ${endpoint}`);
         continue;
       }
     }
@@ -947,7 +955,7 @@ export const useApi = () => {
 };
 
 // Función helper para manejar errores de API
-export const handleApiError = (error: ApiResponse<any>): string => {
+export const handleApiError = (error: ApiResponse<unknown>): string => {
   return error.error || error.message || 'Error desconocido';
 };
 
