@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FolderOpen, Plus, Search, Filter, Calendar, User, TrendingUp, Eye, Edit, Trash2 } from 'lucide-react';
+import '../styles/proyectos.css';
 
 const Proyectos: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,92 +64,92 @@ const Proyectos: React.FC = () => {
 
   const filteredProyectos = proyectos.filter(proyecto => {
     const matchesSearch = proyecto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         proyecto.responsable.toLowerCase().includes(searchTerm.toLowerCase());
+      proyecto.responsable.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || proyecto.estado === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center">
+    <div className="proyectos-container">
+      <div className="proyectos-header">
+        <h1 className="proyectos-title">
           <FolderOpen className="w-8 h-8 text-red-600 mr-3" />
           Proyectos
         </h1>
-        <p className="text-gray-600">
+        <p className="proyectos-subtitle">
           Gestión y seguimiento de proyectos municipales
         </p>
       </div>
 
       {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+      <div className="proyectos-stats-grid">
+        <div className="proyectos-stat-card">
+          <div className="proyectos-stat-content">
             <div>
-              <p className="text-sm text-gray-600">Total Proyectos</p>
-              <p className="text-2xl font-bold text-gray-800">12</p>
+              <p className="proyectos-stat-text-sm">Total Proyectos</p>
+              <p className="proyectos-stat-text-lg">12</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <FolderOpen className="w-6 h-6 text-blue-600" />
+            <div className="proyectos-stat-icon-container bg-blue-100">
+              <FolderOpen className="proyectos-stat-icon text-blue-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+        <div className="proyectos-stat-card">
+          <div className="proyectos-stat-content">
             <div>
-              <p className="text-sm text-gray-600">En Progreso</p>
-              <p className="text-2xl font-bold text-gray-800">8</p>
+              <p className="proyectos-stat-text-sm">En Progreso</p>
+              <p className="proyectos-stat-text-lg">8</p>
             </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-yellow-600" />
+            <div className="proyectos-stat-icon-container bg-yellow-100">
+              <TrendingUp className="proyectos-stat-icon text-yellow-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+        <div className="proyectos-stat-card">
+          <div className="proyectos-stat-content">
             <div>
-              <p className="text-sm text-gray-600">Completados</p>
-              <p className="text-2xl font-bold text-gray-800">3</p>
+              <p className="proyectos-stat-text-sm">Completados</p>
+              <p className="proyectos-stat-text-lg">3</p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-green-600" />
+            <div className="proyectos-stat-icon-container bg-green-100">
+              <Calendar className="proyectos-stat-icon text-green-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+        <div className="proyectos-stat-card">
+          <div className="proyectos-stat-content">
             <div>
-              <p className="text-sm text-gray-600">Presupuesto Total</p>
-              <p className="text-2xl font-bold text-gray-800">$2.5M</p>
+              <p className="proyectos-stat-text-sm">Presupuesto Total</p>
+              <p className="proyectos-stat-text-lg">$2.5M</p>
             </div>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-red-600" />
+            <div className="proyectos-stat-icon-container bg-red-100">
+              <TrendingUp className="proyectos-stat-icon text-red-600" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Filtros y búsqueda */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+      <div className="proyectos-filters">
+        <div className="proyectos-filters-container">
+          <div className="proyectos-search-container">
+            <Search className="proyectos-search-icon" />
             <input
               type="text"
               placeholder="Buscar proyectos..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="proyectos-search-input"
             />
           </div>
-          
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-gray-500" />
+
+          <div className="proyectos-filters-actions">
+            <div className="proyectos-filter-group">
+              <Filter className="proyectos-filter-icon" />
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="proyectos-filter-select"
               >
                 <option value="all">Todos los estados</option>
                 <option value="planificacion">Planificación</option>
@@ -157,10 +158,10 @@ const Proyectos: React.FC = () => {
                 <option value="pausado">Pausado</option>
               </select>
             </div>
-            
+
             <button
               onClick={() => setShowModal(true)}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2"
+              className="proyectos-add-button"
             >
               <Plus className="w-5 h-5" />
               <span>Nuevo Proyecto</span>
@@ -170,71 +171,71 @@ const Proyectos: React.FC = () => {
       </div>
 
       {/* Lista de proyectos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="proyectos-grid">
         {filteredProyectos.map((proyecto) => (
-          <div key={proyecto.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
-                  <FolderOpen className="w-5 h-5 text-white" />
+          <div key={proyecto.id} className="proyectos-card">
+            <div className="proyectos-card-header">
+              <div className="proyectos-card-title-group">
+                <div className="proyectos-card-icon">
+                  <FolderOpen />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-800">{proyecto.nombre}</h3>
-                  <p className="text-sm text-gray-500">{proyecto.categoria}</p>
+                  <h3 className="proyectos-card-name">{proyecto.nombre}</h3>
+                  <p className="proyectos-card-category">{proyecto.categoria}</p>
                 </div>
               </div>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(proyecto.estado)}`}>
+              <span className={`proyectos-card-status ${getStatusColor(proyecto.estado)}`}>
                 {proyecto.estado.replace('-', ' ').charAt(0).toUpperCase() + proyecto.estado.slice(1)}
               </span>
             </div>
-            
-            <p className="text-gray-600 mb-4">{proyecto.descripcion}</p>
-            
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">Progreso</span>
-                <span className="text-sm font-medium text-gray-800">{proyecto.progreso}%</span>
+
+            <p className="proyectos-card-description">{proyecto.descripcion}</p>
+
+            <div className="proyectos-progress-container">
+              <div className="proyectos-progress-header">
+                <span className="proyectos-progress-text">Progreso</span>
+                <span className="proyectos-progress-value">{proyecto.progreso}%</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(proyecto.progreso)}`}
+              <div className="proyectos-progress-bar">
+                <div
+                  className={`proyectos-progress-bar-fill ${getProgressColor(proyecto.progreso)}`}
                   style={{ width: `${proyecto.progreso}%` }}
                 ></div>
               </div>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+
+            <div className="proyectos-details-grid">
               <div>
-                <p className="text-gray-500">Responsable</p>
-                <p className="font-medium text-gray-800 flex items-center">
-                  <User className="w-4 h-4 mr-1" />
+                <p className="proyectos-detail-label">Responsable</p>
+                <p className="proyectos-detail-value">
+                  <User className="proyectos-detail-icon" />
                   {proyecto.responsable}
                 </p>
               </div>
               <div>
-                <p className="text-gray-500">Presupuesto</p>
-                <p className="font-medium text-gray-800">{proyecto.presupuesto}</p>
+                <p className="proyectos-detail-label">Presupuesto</p>
+                <p className="proyectos-detail-value">{proyecto.presupuesto}</p>
               </div>
               <div>
-                <p className="text-gray-500">Inicio</p>
-                <p className="font-medium text-gray-800">{proyecto.fechaInicio}</p>
+                <p className="proyectos-detail-label">Inicio</p>
+                <p className="proyectos-detail-value">{proyecto.fechaInicio}</p>
               </div>
               <div>
-                <p className="text-gray-500">Fin</p>
-                <p className="font-medium text-gray-800">{proyecto.fechaFin}</p>
+                <p className="proyectos-detail-label">Fin</p>
+                <p className="proyectos-detail-value">{proyecto.fechaFin}</p>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
-              <button className="flex-1 bg-blue-50 text-blue-600 py-2 rounded-lg hover:bg-blue-100 transition-colors duration-200 flex items-center justify-center space-x-2">
+
+            <div className="proyectos-card-footer">
+              <button className="proyectos-action-button proyectos-view-button">
                 <Eye className="w-4 h-4" />
                 <span>Ver</span>
               </button>
-              <button className="flex-1 bg-green-50 text-green-600 py-2 rounded-lg hover:bg-green-100 transition-colors duration-200 flex items-center justify-center space-x-2">
+              <button className="proyectos-action-button proyectos-edit-button">
                 <Edit className="w-4 h-4" />
                 <span>Editar</span>
               </button>
-              <button className="flex-1 bg-red-50 text-red-600 py-2 rounded-lg hover:bg-red-100 transition-colors duration-200 flex items-center justify-center space-x-2">
+              <button className="proyectos-action-button proyectos-delete-button">
                 <Trash2 className="w-4 h-4" />
                 <span>Eliminar</span>
               </button>
@@ -245,61 +246,61 @@ const Proyectos: React.FC = () => {
 
       {/* Modal para nuevo proyecto */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Nuevo Proyecto</h2>
-            <form className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+        <div className="proyectos-modal-overlay">
+          <div className="proyectos-modal">
+            <h2 className="proyectos-modal-title">Nuevo Proyecto</h2>
+            <form className="proyectos-modal-form">
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
                   Nombre del Proyecto
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="proyectos-form-input"
                   placeholder="Ingrese el nombre"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
                   Descripción
                 </label>
                 <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="proyectos-form-textarea"
                   rows={3}
                   placeholder="Ingrese la descripción"
                 ></textarea>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
                   Responsable
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="proyectos-form-input"
                   placeholder="Nombre del responsable"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
                   Presupuesto
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="proyectos-form-input"
                   placeholder="$0.00"
                 />
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="proyectos-modal-actions">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  className="proyectos-cancel-button"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+                  className="proyectos-submit-button"
                 >
                   Crear Proyecto
                 </button>

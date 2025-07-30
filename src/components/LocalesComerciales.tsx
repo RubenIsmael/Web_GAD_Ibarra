@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Store, Plus, Search, Filter, MapPin, Phone, Mail, Eye, Edit, Trash2, Building, User, Calendar } from 'lucide-react';
+import '../styles/localesComerciales.css';
 
 const LocalesComerciales: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,93 +71,93 @@ const LocalesComerciales: React.FC = () => {
 
   const filteredLocales = locales.filter(local => {
     const matchesSearch = local.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         local.propietario.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         local.direccion.toLowerCase().includes(searchTerm.toLowerCase());
+      local.propietario.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      local.direccion.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || local.estado === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center">
+    <div className="locales-container">
+      <div className="locales-header">
+        <h1 className="locales-title">
           <Store className="w-8 h-8 text-red-600 mr-3" />
           Locales Comerciales
         </h1>
-        <p className="text-gray-600">
+        <p className="locales-subtitle">
           Registro y gestión de establecimientos comerciales
         </p>
       </div>
 
       {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+      <div className="locales-stats-grid">
+        <div className="locales-stat-card">
+          <div className="locales-stat-content">
             <div>
-              <p className="text-sm text-gray-600">Total Locales</p>
-              <p className="text-2xl font-bold text-gray-800">1,247</p>
+              <p className="locales-stat-text-sm">Total Locales</p>
+              <p className="locales-stat-text-lg">1,247</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Store className="w-6 h-6 text-blue-600" />
+            <div className="locales-stat-icon-container bg-blue-100">
+              <Store className="locales-stat-icon text-blue-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+        <div className="locales-stat-card">
+          <div className="locales-stat-content">
             <div>
-              <p className="text-sm text-gray-600">Activos</p>
-              <p className="text-2xl font-bold text-gray-800">1,089</p>
+              <p className="locales-stat-text-sm">Activos</p>
+              <p className="locales-stat-text-lg">1,089</p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Building className="w-6 h-6 text-green-600" />
+            <div className="locales-stat-icon-container bg-green-100">
+              <Building className="locales-stat-icon text-green-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+        <div className="locales-stat-card">
+          <div className="locales-stat-content">
             <div>
-              <p className="text-sm text-gray-600">Pendientes</p>
-              <p className="text-2xl font-bold text-gray-800">89</p>
+              <p className="locales-stat-text-sm">Pendientes</p>
+              <p className="locales-stat-text-lg">89</p>
             </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-yellow-600" />
+            <div className="locales-stat-icon-container bg-yellow-100">
+              <Calendar className="locales-stat-icon text-yellow-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+        <div className="locales-stat-card">
+          <div className="locales-stat-content">
             <div>
-              <p className="text-sm text-gray-600">Nuevos (Este Mes)</p>
-              <p className="text-2xl font-bold text-gray-800">23</p>
+              <p className="locales-stat-text-sm">Nuevos (Este Mes)</p>
+              <p className="locales-stat-text-lg">23</p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Plus className="w-6 h-6 text-purple-600" />
+            <div className="locales-stat-icon-container bg-purple-100">
+              <Plus className="locales-stat-icon text-purple-600" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Filtros y búsqueda */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+      <div className="locales-filters">
+        <div className="locales-filters-container">
+          <div className="locales-search-container">
+            <Search className="locales-search-icon" />
             <input
               type="text"
               placeholder="Buscar locales comerciales..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="locales-search-input"
             />
           </div>
-          
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-gray-500" />
+
+          <div className="locales-filters-actions">
+            <div className="locales-filter-group">
+              <Filter className="locales-filter-icon" />
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="locales-filter-select"
               >
                 <option value="all">Todos los estados</option>
                 <option value="activo">Activo</option>
@@ -165,10 +166,10 @@ const LocalesComerciales: React.FC = () => {
                 <option value="suspendido">Suspendido</option>
               </select>
             </div>
-            
+
             <button
               onClick={() => setShowModal(true)}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2"
+              className="locales-add-button"
             >
               <Plus className="w-5 h-5" />
               <span>Registrar Local</span>
@@ -178,83 +179,83 @@ const LocalesComerciales: React.FC = () => {
       </div>
 
       {/* Lista de locales */}
-      <div className="space-y-4">
+      <div className="locales-list">
         {filteredLocales.map((local) => (
-          <div key={local.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center">
-                    <Store className="w-6 h-6 text-white" />
+          <div key={local.id} className="locales-card">
+            <div className="locales-card-content">
+              <div className="locales-card-main">
+                <div className="locales-card-header">
+                  <div className="locales-card-icon">
+                    <Store />
                   </div>
-                  <div>
-                    <div className="flex items-center space-x-3">
-                      <h3 className="text-xl font-bold text-gray-800">{local.nombre}</h3>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(local.categoria)}`}>
+                  <div className="locales-card-info">
+                    <div className="locales-card-title">
+                      <h3 className="locales-card-name">{local.nombre}</h3>
+                      <span className={`locales-card-badge ${getCategoryColor(local.categoria)}`}>
                         {local.categoria}
                       </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(local.estado)}`}>
+                      <span className={`locales-card-badge ${getStatusColor(local.estado)}`}>
                         {local.estado}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">Licencia: {local.licencia}</p>
+                    <p className="locales-card-license">Licencia: {local.licencia}</p>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <User className="w-4 h-4 text-gray-500" />
+
+                <div className="locales-details-grid">
+                  <div className="locales-detail-item">
+                    <User className="locales-detail-icon" />
                     <div>
-                      <p className="text-gray-500">Propietario</p>
-                      <p className="font-medium text-gray-800">{local.propietario}</p>
+                      <p className="locales-detail-label">Propietario</p>
+                      <p className="locales-detail-value">{local.propietario}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="w-4 h-4 text-gray-500" />
+                  <div className="locales-detail-item">
+                    <MapPin className="locales-detail-icon" />
                     <div>
-                      <p className="text-gray-500">Dirección</p>
-                      <p className="font-medium text-gray-800">{local.direccion}</p>
+                      <p className="locales-detail-label">Dirección</p>
+                      <p className="locales-detail-value">{local.direccion}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Phone className="w-4 h-4 text-gray-500" />
+                  <div className="locales-detail-item">
+                    <Phone className="locales-detail-icon" />
                     <div>
-                      <p className="text-gray-500">Teléfono</p>
-                      <p className="font-medium text-gray-800">{local.telefono}</p>
+                      <p className="locales-detail-label">Teléfono</p>
+                      <p className="locales-detail-value">{local.telefono}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Mail className="w-4 h-4 text-gray-500" />
+                  <div className="locales-detail-item">
+                    <Mail className="locales-detail-icon" />
                     <div>
-                      <p className="text-gray-500">Email</p>
-                      <p className="font-medium text-gray-800">{local.email}</p>
+                      <p className="locales-detail-label">Email</p>
+                      <p className="locales-detail-value">{local.email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Building className="w-4 h-4 text-gray-500" />
+                  <div className="locales-detail-item">
+                    <Building className="locales-detail-icon" />
                     <div>
-                      <p className="text-gray-500">Tipo</p>
-                      <p className="font-medium text-gray-800">{local.tipo}</p>
+                      <p className="locales-detail-label">Tipo</p>
+                      <p className="locales-detail-value">{local.tipo}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="w-4 h-4 text-gray-500" />
+                  <div className="locales-detail-item">
+                    <Calendar className="locales-detail-icon" />
                     <div>
-                      <p className="text-gray-500">Registro</p>
-                      <p className="font-medium text-gray-800">{local.fechaRegistro}</p>
+                      <p className="locales-detail-label">Registro</p>
+                      <p className="locales-detail-value">{local.fechaRegistro}</p>
                     </div>
                   </div>
                 </div>
               </div>
-              
-              <div className="flex items-center space-x-2 mt-4 lg:mt-0">
-                <button className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors duration-200">
+
+              <div className="locales-card-actions">
+                <button className="locales-action-button locales-view-button">
                   <Eye className="w-5 h-5" />
                 </button>
-                <button className="bg-green-50 text-green-600 p-2 rounded-lg hover:bg-green-100 transition-colors duration-200">
+                <button className="locales-action-button locales-edit-button">
                   <Edit className="w-5 h-5" />
                 </button>
-                <button className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors duration-200">
+                <button className="locales-action-button locales-delete-button">
                   <Trash2 className="w-5 h-5" />
                 </button>
               </div>
@@ -265,36 +266,36 @@ const LocalesComerciales: React.FC = () => {
 
       {/* Modal para registrar local */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Registrar Nuevo Local</h2>
-            <form className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+        <div className="locales-modal-overlay">
+          <div className="locales-modal">
+            <h2 className="locales-modal-title">Registrar Nuevo Local</h2>
+            <form className="locales-modal-form">
+              <div className="locales-form-grid">
+                <div className="locales-form-group">
+                  <label className="locales-form-label">
                     Nombre del Local
                   </label>
                   <input
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="locales-form-input"
                     placeholder="Ingrese el nombre"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="locales-form-group">
+                  <label className="locales-form-label">
                     Propietario
                   </label>
                   <input
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="locales-form-input"
                     placeholder="Nombre del propietario"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="locales-form-group">
+                  <label className="locales-form-label">
                     Tipo de Local
                   </label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                  <select className="locales-form-select">
                     <option>Seleccione el tipo</option>
                     <option>Restaurant</option>
                     <option>Tienda</option>
@@ -302,11 +303,11 @@ const LocalesComerciales: React.FC = () => {
                     <option>Oficina</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="locales-form-group">
+                  <label className="locales-form-label">
                     Categoría
                   </label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                  <select className="locales-form-select">
                     <option>Seleccione la categoría</option>
                     <option>Gastronomía</option>
                     <option>Comercio</option>
@@ -314,48 +315,48 @@ const LocalesComerciales: React.FC = () => {
                     <option>Servicios</option>
                   </select>
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="locales-form-group locales-form-full-width">
+                  <label className="locales-form-label">
                     Dirección
                   </label>
                   <input
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="locales-form-input"
                     placeholder="Dirección completa"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="locales-form-group">
+                  <label className="locales-form-label">
                     Teléfono
                   </label>
                   <input
                     type="tel"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="locales-form-input"
                     placeholder="0987654321"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="locales-form-group">
+                  <label className="locales-form-label">
                     Email
                   </label>
                   <input
                     type="email"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="locales-form-input"
                     placeholder="email@ejemplo.com"
                   />
                 </div>
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="locales-modal-actions">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  className="locales-cancel-button"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+                  className="locales-submit-button"
                 >
                   Registrar Local
                 </button>

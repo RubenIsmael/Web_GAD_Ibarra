@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FileText, Plus, Search, Filter, Eye, Edit, Trash2 } from 'lucide-react';
+import '../styles/requerimientos.css'; 
 
 const Requerimientos: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,44 +48,43 @@ const Requerimientos: React.FC = () => {
 
   const filteredRequerimientos = requerimientos.filter(req => {
     const matchesSearch = req.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         req.solicitante.toLowerCase().includes(searchTerm.toLowerCase());
+      req.solicitante.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || req.estado === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center">
-          <FileText className="w-8 h-8 text-red-600 mr-3" />
+    <div className="req-container">
+      {/* Encabezado */}
+      <div className="req-header">
+        <h1 className="req-title">
+          <FileText className="req-title-icon" />
           Requerimientos
         </h1>
-        <p className="text-gray-600">
-          Gestión de solicitudes y permisos municipales
-        </p>
+        <p className="req-subtitle">Gestión de solicitudes y permisos municipales</p>
       </div>
 
       {/* Filtros y búsqueda */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+      <div className="req-filters-card">
+        <div className="req-filters-container">
+          <div className="req-search-container">
+            <Search className="req-search-icon" />
             <input
               type="text"
               placeholder="Buscar requerimientos..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="req-search-input"
             />
           </div>
-          
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-gray-500" />
+
+          <div className="req-filters-actions">
+            <div className="req-filter-group">
+              <Filter className="req-filter-icon" />
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="req-filter-select"
               >
                 <option value="all">Todos los estados</option>
                 <option value="pendiente">Pendiente</option>
@@ -92,12 +92,12 @@ const Requerimientos: React.FC = () => {
                 <option value="rechazado">Rechazado</option>
               </select>
             </div>
-            
+
             <button
               onClick={() => setShowModal(true)}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2"
+              className="req-new-button"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="req-new-button-icon" />
               <span>Nuevo</span>
             </button>
           </div>
@@ -105,34 +105,34 @@ const Requerimientos: React.FC = () => {
       </div>
 
       {/* Lista de requerimientos */}
-      <div className="space-y-4">
+      <div className="req-list">
         {filteredRequerimientos.map((req) => (
-          <div key={req.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-2">
-                  <h3 className="text-xl font-semibold text-gray-800">{req.titulo}</h3>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(req.estado)}`}>
+          <div key={req.id} className="req-item">
+            <div className="req-item-content">
+              <div className="req-item-main">
+                <div className="req-item-header">
+                  <h3 className="req-item-title">{req.titulo}</h3>
+                  <span className={`req-item-status ${getStatusColor(req.estado)}`}>
                     {req.estado.charAt(0).toUpperCase() + req.estado.slice(1)}
                   </span>
                 </div>
-                <p className="text-gray-600 mb-2">{req.descripcion}</p>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <p className="req-item-description">{req.descripcion}</p>
+                <div className="req-item-meta">
                   <span>Solicitante: {req.solicitante}</span>
                   <span>Fecha: {req.fecha}</span>
                   <span>Tipo: {req.tipo}</span>
                 </div>
               </div>
-              
-              <div className="flex items-center space-x-2 mt-4 lg:mt-0">
-                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200">
-                  <Eye className="w-5 h-5" />
+
+              <div className="req-item-actions">
+                <button className="req-action-button req-action-view">
+                  <Eye className="req-action-icon" />
                 </button>
-                <button className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200">
-                  <Edit className="w-5 h-5" />
+                <button className="req-action-button req-action-edit">
+                  <Edit className="req-action-icon" />
                 </button>
-                <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200">
-                  <Trash2 className="w-5 h-5" />
+                <button className="req-action-button req-action-delete">
+                  <Trash2 className="req-action-icon" />
                 </button>
               </div>
             </div>
@@ -142,51 +142,51 @@ const Requerimientos: React.FC = () => {
 
       {/* Modal para nuevo requerimiento */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Nuevo Requerimiento</h2>
-            <form className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+        <div className="req-modal-overlay">
+          <div className="req-modal">
+            <h2 className="req-modal-title">Nuevo Requerimiento</h2>
+            <form className="req-modal-form">
+              <div className="req-form-group">
+                <label className="req-form-label">
                   Título
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="req-form-input"
                   placeholder="Ingrese el título"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="req-form-group">
+                <label className="req-form-label">
                   Descripción
                 </label>
                 <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="req-form-textarea"
                   rows={3}
                   placeholder="Ingrese la descripción"
                 ></textarea>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="req-form-group">
+                <label className="req-form-label">
                   Solicitante
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="req-form-input"
                   placeholder="Nombre del solicitante"
                 />
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="req-modal-actions">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  className="req-modal-cancel"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+                  className="req-modal-submit"
                 >
                   Crear
                 </button>
