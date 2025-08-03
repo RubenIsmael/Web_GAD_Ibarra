@@ -1,6 +1,6 @@
 const API_BASE_URL = 'http://34.10.172.54:8080';
 
-// Tipos de datos específicos
+// Tipos de datos específicos basados en la API real
 export interface LoginRequest {
   username: string;
   password: string;
@@ -22,6 +22,16 @@ export interface LoginResponse {
   user?: User;
 }
 
+export interface ApprovalResponse {
+  success: boolean;
+  message: string;
+  data?: string;
+  id?: string;
+  status?: string;
+  timestamp?: string;
+  approvedBy?: string;
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -30,7 +40,56 @@ export interface ApiResponse<T = unknown> {
   status?: number;
 }
 
-// Interfaces específicas para cada entidad
+// Interfaces específicas para proyectos basadas en Swagger
+export interface ProyectoAPI {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  estado: 'pendiente' | 'aprobado' | 'rechazado' | 'en-progreso' | 'completado';
+  fechaEnvio: string;
+  responsable: string;
+  email?: string;
+  identification?: string;
+  presupuesto?: number;
+  categoria?: string;
+  fechaInicio?: string;
+  fechaFin?: string;
+}
+
+export interface PaginatedResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  pageable: {
+    pageNumber: number;
+    pageSize: number;
+    offset: number;
+    paged: boolean;
+    unpaged: boolean;
+  };
+  empty: boolean;
+  sort: {
+    sorted: boolean;
+    empty: boolean;
+    unsorted: boolean;
+  };
+  size: number;
+  number: number;
+}
+
+export interface CreateProyectoRequest {
+  nombre: string;
+  descripcion: string;
+  responsable?: string;
+  presupuesto?: number;
+  categoria?: string;
+}
+
+export interface UpdateProyectoRequest extends Partial<CreateProyectoRequest> {
+  estado?: string;
+}
+
+// Interfaces para otras entidades
 export interface Requerimiento {
   id: string;
   titulo: string;
@@ -68,26 +127,6 @@ export interface SendMensajeRequest {
   contenido: string;
   destinatario: string;
   asunto?: string;
-}
-
-export interface Proyecto {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  estado: string;
-  fechaInicio: string;
-  fechaFin?: string;
-  responsable?: string;
-  presupuesto?: number;
-}
-
-export interface CreateProyectoRequest {
-  nombre: string;
-  descripcion: string;
-  fechaInicio: string;
-  fechaFin?: string;
-  responsable?: string;
-  presupuesto?: number;
 }
 
 export interface Feria {
@@ -181,9 +220,10 @@ class ApiService {
     this.loadAuthToken();
   }
 
-  // Método para cargar el token de autenticación 
+  // Método para cargar el token de autenticación desde memoria
   private loadAuthToken(): void {
-    this.authToken = null;
+    // Por defecto usar el token proporcionado o null para login dinámico
+    this.authToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJBVVRIMEpXVC1KVVNUSU5ERVYtQkFDS0VORCIsInN1YiI6ImFkbWluQG1haWwuY29tIiwicm9sZXMiOiJST0xFX0FETUlOIiwiaWF0IjoxNzU0MDg3OTYwLCJleHAiOjE3NTQwODk3NjAsImp0aSI6IjRiNTVhZDdjLTc3OTMtNDBmYi1hNWNmLTRlYjdjN2MyZDA4ZiIsIm5iZiI6MTc1NDA4Nzk2MH0.wHBondKwwKzvwvR9P1M8Kbiu3PXQbas0xS9QXa9J7pA';
   }
 
   // Método para guardar el token de autenticación
@@ -201,7 +241,7 @@ class ApiService {
     return this.authToken;
   }
 
-  // Método para crear headers mejorados
+  // Método para crear headers con autenticación Bearer
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -287,7 +327,6 @@ class ApiService {
 
       console.log(`🌐 Petición a: ${url}`);
       console.log(`⚙️ Método: ${config.method || 'GET'}`);
-      console.log(`📋 Headers:`, config.headers);
 
       let response: Response;
       
@@ -300,20 +339,15 @@ class ApiService {
       }
       
       console.log(`📡 Status: ${response.status} ${response.statusText}`);
-      console.log(`✅ OK: ${response.ok}`);
       
       // Información adicional de la respuesta
       const contentType = response.headers.get('content-type') || '';
-      const contentLength = response.headers.get('content-length') || '0';
-      console.log(`📝 Content-Type: ${contentType}`);
-      console.log(`📏 Content-Length: ${contentLength}`);
       
       // Manejo mejorado de diferentes tipos de respuesta
       let data: ServerResponse | null = null;
       
       try {
         const responseText = await response.text();
-        console.log(`📄 Response length: ${responseText.length} chars`);
         
         if (responseText.trim()) {
           if (contentType.includes('application/json') || 
@@ -447,7 +481,7 @@ class ApiService {
     }
   }
 
-  // Método de autenticación completamente reescrito
+  // Método de autenticación mejorado
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
       console.log('🔐 Iniciando proceso de login...');
@@ -468,22 +502,7 @@ class ApiService {
         };
       }
       
-      if (credentials.username.trim().length < 3) {
-        return {
-          success: false,
-          message: 'El usuario debe tener al menos 3 caracteres'
-        };
-      }
-      
-      if (credentials.password.trim().length < 4) {
-        return {
-          success: false,
-          message: 'La contraseña debe tener al menos 4 caracteres'
-        };
-      }
-      
       // Verificar conexión base
-      console.log('🔍 Verificando conexión con el servidor...');
       const serverAvailable = await this.checkBaseConnection();
       if (!serverAvailable) {
         return {
@@ -499,142 +518,74 @@ class ApiService {
         '/login',
         '/api/login',
         '/api/v1/auth/login',
-        '/v1/auth/login',
-        '/api/authenticate',
-        '/authenticate'
+        '/v1/auth/login'
       ];
       
       const loginData = {
         username: credentials.username.trim(),
         password: credentials.password.trim(),
-        // Campos adicionales que algunos sistemas podrían esperar
-        email: credentials.username.trim(),
-        user: credentials.username.trim(),
-        login: credentials.username.trim(),
       };
-      
-      console.log('🔍 Probando endpoints de login...');
-      
-      let lastError = '';
-      let validEndpointFound = false;
       
       for (const endpoint of loginEndpoints) {
         try {
-          console.log(`🎯 Intentando: ${this.baseUrl}${endpoint}`);
-          
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 segundos
-          
           const response = await fetch(`${this.baseUrl}${endpoint}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'Cache-Control': 'no-cache',
             },
             body: JSON.stringify(loginData),
-            signal: controller.signal,
             mode: 'cors',
             credentials: 'include',
           });
 
-          clearTimeout(timeoutId);
-          console.log(`📡 ${endpoint} -> Status: ${response.status}`);
-
-          // Si es 404 o 405, el endpoint no existe
           if (response.status === 404 || response.status === 405) {
-            console.log(`⏭️ Endpoint ${endpoint} no disponible`);
             continue;
           }
-          
-          validEndpointFound = true;
 
-          // Leer respuesta
           let responseData: ServerResponse = {};
-          const contentType = response.headers.get('content-type') || '';
-          
           try {
             const responseText = await response.text();
-            console.log(`📄 Response (${responseText.length} chars):`, responseText.substring(0, 300));
-            
             if (responseText.trim()) {
-              if (contentType.includes('application/json') || 
-                  responseText.trim().startsWith('{') || 
-                  responseText.trim().startsWith('[')) {
-                responseData = JSON.parse(responseText) as ServerResponse;
-              } else {
-                responseData = { message: responseText };
-              }
+              responseData = JSON.parse(responseText) as ServerResponse;
             }
           } catch {
-            console.error('❌ Error parseando respuesta');
             responseData = { message: 'Error al procesar respuesta del servidor' };
           }
-
-          console.log('📊 Datos de respuesta:', responseData);
           
           // Login exitoso
-          if (response.ok && response.status >= 200 && response.status < 300) {
-            console.log('✅ Login exitoso!');
-            
-            // Buscar token en múltiples ubicaciones posibles
+          if (response.ok) {
             const token = (responseData as Record<string, unknown>).token as string || 
-                         (responseData as Record<string, unknown>).accessToken as string || 
-                         (responseData as Record<string, unknown>).access_token as string || 
-                         (responseData as Record<string, unknown>).authToken as string ||
-                         (responseData as Record<string, unknown>).jwt as string ||
-                         (responseData as Record<string, unknown>).sessionToken as string ||
-                         response.headers.get('Authorization')?.replace('Bearer ', '') ||
-                         response.headers.get('X-Auth-Token');
+                         (responseData as Record<string, unknown>).accessToken as string;
             
-            // Construir objeto de usuario
             const userObj = (responseData as Record<string, unknown>).user as Record<string, unknown> || {};
             const user: User = {
               id: ((responseData as Record<string, unknown>).id || 
-                  (responseData as Record<string, unknown>).userId || 
                   userObj.id || 
                   Date.now().toString()) as string,
               username: ((responseData as Record<string, unknown>).username || 
                        userObj.username || 
                        credentials.username) as string,
               email: ((responseData as Record<string, unknown>).email || 
-                     userObj.email || 
-                     `${credentials.username}@ibarra.gob.ec`) as string,
+                     userObj.email) as string,
               role: ((responseData as Record<string, unknown>).role || 
                     userObj.role || 
-                    ((responseData as Record<string, unknown>).authorities as string[])?.[0] || 
                     'user') as string,
-              firstName: ((responseData as Record<string, unknown>).firstName || 
-                        userObj.firstName || 
-                        (responseData as Record<string, unknown>).nombre) as string,
-              lastName: ((responseData as Record<string, unknown>).lastName || 
-                       userObj.lastName || 
-                       (responseData as Record<string, unknown>).apellido) as string,
             };
             
-            // Guardar token si existe
             if (token) {
               this.saveAuthToken(token);
             }
             
             return {
               success: true,
-             token: token || undefined,
+              token: token || undefined,
               user: user,
               message: responseData.message || 'Autenticación exitosa',
             };
           }
           
           // Manejar errores de autenticación
-          const errorMessage = responseData.message || 
-                              responseData.error || 
-                              responseData.detail ||
-                              `Error HTTP ${response.status}`;
-          
-          console.log(`❌ Login falló: ${errorMessage}`);
-          lastError = errorMessage;
-          
-          // Si es error de credenciales, no seguir probando
           if (response.status === 401 || response.status === 403) {
             return {
               success: false,
@@ -642,62 +593,18 @@ class ApiService {
             };
           }
           
-          // Para errores 400, también podría ser credenciales incorrectas
-          if (response.status === 400 && 
-              (errorMessage.toLowerCase().includes('invalid') ||
-               errorMessage.toLowerCase().includes('incorrect') ||
-               errorMessage.toLowerCase().includes('wrong'))) {
-            return {
-              success: false,
-              message: 'Credenciales incorrectas. Verifique su usuario y contraseña.',
-            };
-          }
-          
-          // Para otros errores del servidor, continuar con el siguiente endpoint
-          if (response.status >= 500) {
-            console.log(`🔄 Error del servidor ${response.status}, probando siguiente...`);
-            continue;
-          }
-          
-          // Para otros errores (400, etc.), devolver inmediatamente
-          return {
-            success: false,
-            message: errorMessage,
-          };
-          
         } catch (endpointError) {
-          console.error(`💥 Error con endpoint ${endpoint}:`, endpointError);
-          
-          if (endpointError instanceof DOMException && endpointError.name === 'AbortError') {
-            lastError = 'Timeout de conexión';
-            console.log(`⏰ Timeout para ${endpoint}`);
-          } else if (endpointError instanceof TypeError) {
-            lastError = 'Error de red o CORS';
-            console.log(`🌐 Error de red para ${endpoint}`);
-          } else {
-            lastError = endpointError instanceof Error ? endpointError.message : 'Error desconocido';
-          }
-          
+          console.error(`Error con endpoint ${endpoint}:`, endpointError);
           continue;
         }
       }
       
-      // Si no se encontró ningún endpoint válido
-      if (!validEndpointFound) {
-        return {
-          success: false,
-          message: 'No se encontró un endpoint de autenticación válido en el servidor',
-        };
-      }
-      
-      // Si se encontraron endpoints pero todos fallaron
       return {
         success: false,
-        message: lastError || 'Error en el proceso de autenticación',
+        message: 'Error en el proceso de autenticación',
       };
       
     } catch {
-      console.error('💥 Error general de login');
       return {
         success: false,
         message: 'Error de conexión con el servidor',
@@ -712,14 +619,10 @@ class ApiService {
         method: 'POST',
       });
       
-      // Limpiar token localmente independientemente del resultado
       this.clearAuthToken();
-      
       return result;
     } catch {
-      // Limpiar token incluso si hay error
       this.clearAuthToken();
-      
       return {
         success: true, 
         message: 'Sesión cerrada localmente',
@@ -732,10 +635,10 @@ class ApiService {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  async post<T>(endpoint: string, data: unknown): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data ? JSON.stringify(data) : undefined,
     });
   }
 
@@ -757,11 +660,8 @@ class ApiService {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
 
-  // Health check mejorado
+  // Health check
   async healthCheck(): Promise<ApiResponse<HealthCheckResponse>> {
-    console.log('🏥 Iniciando health check...');
-    
-    // Verificar conexión base primero
     const baseConnection = await this.checkBaseConnection();
     if (!baseConnection) {
       return {
@@ -771,60 +671,103 @@ class ApiService {
       };
     }
     
-    // Endpoints de health check
-    const healthEndpoints = [
-      '/health',
-      '/actuator/health', 
-      '/api/health',
-      '/status',
-      '/ping',
-      '/api/status',
-      '/healthcheck',
-      '/api/ping'
-    ];
+    const healthEndpoints = ['/health', '/actuator/health', '/api/health', '/status'];
     
     for (const endpoint of healthEndpoints) {
       try {
-        console.log(`🔍 Verificando: ${endpoint}`);
         const result = await this.get<HealthCheckResponse>(endpoint);
-        
         if (result.success) {
-          console.log(`✅ Health check exitoso en: ${endpoint}`);
-          return {
-            ...result,
-            data: {
-              status: result.data?.status || 'ok',
-              timestamp: result.data?.timestamp || new Date().toISOString(),
-              version: result.data?.version || '1.0.0',
-              uptime: result.data?.uptime,
-              database: result.data?.database,
-            }
-          };
+          return result;
         }
       } catch {
-        console.log(`❌ Health check falló en: ${endpoint}`);
         continue;
       }
     }
     
-    // Si no hay endpoints específicos de health, pero el servidor responde
-    console.log('⚠️ No hay endpoints de health específicos, pero el servidor está disponible');
     return {
       success: true,
       data: {
         status: 'available',
         timestamp: new Date().toISOString(),
-        version: 'unknown'
       },
-      message: 'Servidor disponible (sin endpoint de salud específico)',
+      message: 'Servidor disponible',
     };
   }
 
-  // Métodos específicos de la aplicación
+  // ========== MÉTODOS ESPECÍFICOS PARA PROYECTOS (basados en Swagger) ==========
+  
+  // Obtener proyectos pendientes con paginación (basado en swagger)
+  async getProyectosPendientes(page: number = 0, size: number = 10): Promise<ApiResponse<PaginatedResponse<ProyectoAPI>>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString()
+    });
+    
+    return this.get<PaginatedResponse<ProyectoAPI>>(`/admin/pending?${params.toString()}`);
+  }
+
+  // Aprobar usuario/proyecto (basado en swagger)
+  async aprobarProyecto(userId: string): Promise<ApiResponse<ApprovalResponse>> {
+    return this.post<ApprovalResponse>(`/admin/approve/${userId}`, {});
+  }
+
+  // Rechazar usuario/proyecto (basado en swagger)
+  async rechazarProyecto(userId: string): Promise<ApiResponse<ApprovalResponse>> {
+    return this.delete<ApprovalResponse>(`/admin/reject/${userId}`);
+  }
+
+  // Obtener todos los proyectos con filtros y paginación
+  async getProyectos(
+    page: number = 0, 
+    size: number = 10, 
+    estado?: string, 
+    search?: string
+  ): Promise<ApiResponse<PaginatedResponse<ProyectoAPI>>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString()
+    });
+    
+    if (estado && estado !== 'all') {
+      params.append('estado', estado);
+    }
+    
+    if (search && search.trim()) {
+      params.append('search', search.trim());
+    }
+    
+    return this.get<PaginatedResponse<ProyectoAPI>>(`/api/proyectos?${params.toString()}`);
+  }
+
+  // Obtener proyecto específico
+  async getProyecto(id: string): Promise<ApiResponse<ProyectoAPI>> {
+    return this.get<ProyectoAPI>(`/api/proyectos/${id}`);
+  }
+
+  // Crear nuevo proyecto
+  async createProyecto(data: CreateProyectoRequest): Promise<ApiResponse<ProyectoAPI>> {
+    return this.post<ProyectoAPI>('/api/proyectos', data);
+  }
+
+  // Actualizar proyecto
+  async updateProyecto(id: string, data: UpdateProyectoRequest): Promise<ApiResponse<ProyectoAPI>> {
+    return this.put<ProyectoAPI>(`/api/proyectos/${id}`, data);
+  }
+
+  // Eliminar proyecto
+  async deleteProyecto(id: string): Promise<ApiResponse<void>> {
+    return this.delete<void>(`/api/proyectos/${id}`);
+  }
+
+  // ========== MÉTODOS PARA OTRAS ENTIDADES ==========
 
   // Requerimientos
-  async getRequerimientos(): Promise<ApiResponse<Requerimiento[]>> {
-    return this.get<Requerimiento[]>('/api/requerimientos');
+  async getRequerimientos(page: number = 0, size: number = 10): Promise<ApiResponse<PaginatedResponse<Requerimiento>>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString()
+    });
+    return this.get<PaginatedResponse<Requerimiento>>(`/api/requerimientos?${params.toString()}`);
   }
 
   async getRequerimiento(id: string): Promise<ApiResponse<Requerimiento>> {
@@ -858,27 +801,6 @@ class ApiService {
 
   async markMensajeAsRead(id: string): Promise<ApiResponse<void>> {
     return this.patch<void>(`/api/mensajes/${id}/read`, {});
-  }
-
-  // Proyectos
-  async getProyectos(): Promise<ApiResponse<Proyecto[]>> {
-    return this.get<Proyecto[]>('/api/proyectos');
-  }
-
-  async getProyecto(id: string): Promise<ApiResponse<Proyecto>> {
-    return this.get<Proyecto>(`/api/proyectos/${id}`);
-  }
-
-  async createProyecto(data: CreateProyectoRequest): Promise<ApiResponse<Proyecto>> {
-    return this.post<Proyecto>('/api/proyectos', data);
-  }
-
-  async updateProyecto(id: string, data: Partial<CreateProyectoRequest>): Promise<ApiResponse<Proyecto>> {
-    return this.put<Proyecto>(`/api/proyectos/${id}`, data);
-  }
-
-  async deleteProyecto(id: string): Promise<ApiResponse<void>> {
-    return this.delete<void>(`/api/proyectos/${id}`);
   }
 
   // Ferias
@@ -941,8 +863,38 @@ class ApiService {
     this.saveAuthToken(token);
   }
 
-  clearToken(): void {
+clearToken(): void {
     this.clearAuthToken();
+  }
+
+  // Método para verificar si el token está expirado
+  isTokenExpired(): boolean {
+    const token = this.getAuthToken();
+    if (!token) {
+      return true;
+    }
+    
+    try {
+      // Decodificar el JWT para verificar la expiración
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const now = Math.floor(Date.now() / 1000);
+      
+      // Verificar si el token expira en los próximos 5 minutos
+      return payload.exp && (payload.exp - now) < 300;
+    } catch (error) {
+      console.error('Error decodificando token:', error);
+      return true; 
+    }
+  }
+
+  // Método para refrescar el token
+  refreshToken(): void {
+    console.log('🔄 Refrescando token de autenticación...');
+
+    this.clearAuthToken();
+    
+    // Redirigir al login o mostrar mensaje
+    console.log('⚠️ Token expirado. Es necesario autenticarse nuevamente.');
   }
 }
 
