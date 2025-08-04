@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { FolderOpen, Plus, Search, Filter, Calendar, User, TrendingUp, Eye, Edit, Trash2, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { apiService } from '../services/api';
+import { ApiService } from './login/ApiService'; 
 import '../styles/proyectos.css';
+
+// *** CREAR INSTANCIA DEL SERVICIO ***
+const apiService = new ApiService();
 
 // Interfaces actualizadas basadas en la API
 interface ProyectoAPI {
@@ -17,6 +20,7 @@ interface ProyectoAPI {
   fechaFin?: string;
 }
 
+// *** ELIMINAR PaginatedResponse SI NO SE USA O UTILIZARLA ***
 interface PaginatedResponse {
   content: ProyectoAPI[];
   totalElements: number;
@@ -74,32 +78,63 @@ const Proyectos: React.FC = () => {
     categoria: ''
   });
 
-  // Cargar proyectos desde la API
+  // *** FUNCIÓN MEJORADA PARA VERIFICAR TOKEN ***
+  const verificarToken = (): boolean => {
+    console.log('🔍 Verificando estado de autenticación...');
+    console.log('🔑 Token actual:', apiService.getCurrentToken()?.substring(0, 50) + '...');
+    console.log('✅ ¿Está autenticado?:', apiService.isAuthenticated());
+    
+    if (!apiService.isAuthenticated()) {
+      console.error('❌ No hay token de autenticación válido');
+      setError('Sesión expirada. Por favor, inicie sesión nuevamente.');
+      return false;
+    }
+    
+    // Verificar si el token está expirado
+    if (apiService.isTokenExpired()) {
+      console.warn('⚠️ Token expirado');
+      setError('Su sesión ha expirado. Por favor, inicie sesión nuevamente.');
+      apiService.clearToken();
+      return false;
+    }
+    
+    console.log('✅ Token válido y no expirado');
+    return true;
+  };
+
+  // *** CARGAR PROYECTOS CON VERIFICACIÓN DE TOKEN UNIFICADA ***
   const loadProyectos = async (page: number = currentPage, size: number = pageSize, status: string = filterStatus) => {
     try {
       setLoading(true);
       setError('');
       
-      // Construir parámetros de consulta
-      const params = new URLSearchParams({
-        page: page.toString(),
-        size: size.toString()
-      });
+      console.log('🚀 Iniciando carga de proyectos...');
       
-      // Agregar filtro de estado si no es 'all'
-      if (status !== 'all') {
-        params.append('estado', status);
+      // *** VERIFICAR TOKEN ANTES DE HACER LA PETICIÓN ***
+      if (!verificarToken()) {
+        setLoading(false);
+        return;
       }
       
-      // Agregar búsqueda si existe
-      if (searchTerm.trim()) {
-        params.append('search', searchTerm.trim());
+      console.log('📊 Parámetros de consulta:', { page, size, status, searchTerm });
+      
+      // *** USAR MÉTODO ESPECÍFICO PARA PROYECTOS PENDIENTES ***
+      let response: { success: boolean; data?: PaginatedResponse; error?: string; message?: string; status?: number };
+      
+      if (status === 'all' || status === 'pendiente') {
+        console.log('🔍 Usando endpoint de proyectos pendientes...');
+        response = await apiService.getProyectosPendientes(page, size);
+      } else {
+        console.log('🔍 Usando endpoint general de proyectos...');
+        response = await apiService.getProyectos(page, size, status, searchTerm);
       }
       
-      const endpoint = `/admin/pending?${params.toString()}`;
-      const response = await apiService.get<PaginatedResponse>(endpoint);
+      console.log('📡 Respuesta de la API:', response);
       
       if (response.success && response.data) {
+        console.log('✅ Proyectos cargados exitosamente');
+        console.log('📋 Cantidad de proyectos:', response.data.content.length);
+        
         setProyectos(response.data.content);
         setTotalPages(response.data.totalPages);
         setTotalElements(response.data.totalElements);
@@ -107,13 +142,24 @@ const Proyectos: React.FC = () => {
         
         // Calcular estadísticas
         calculateStats(response.data.content, response.data.totalElements);
+        
       } else {
-        setError(response.error || 'Error al cargar proyectos');
+        console.error('❌ Error en respuesta:', response.error || response.message);
+        
+        // *** MANEJAR ERRORES DE AUTENTICACIÓN ESPECÍFICAMENTE ***
+        if (response.status === 401) {
+          setError('Su sesión ha expirado. Por favor, inicie sesión nuevamente.');
+          apiService.clearToken();
+        } else if (response.status === 403) {
+          setError('No tiene permisos para ver los proyectos. Contacte al administrador.');
+        } else {
+          setError(response.error || response.message || 'Error al cargar proyectos');
+        }
         setProyectos([]);
       }
     } catch (err) {
+      console.error('💥 Error de conexión al cargar proyectos:', err);
       setError('Error de conexión al cargar proyectos');
-      console.error('Error loading proyectos:', err);
     } finally {
       setLoading(false);
     }
@@ -133,49 +179,69 @@ const Proyectos: React.FC = () => {
     });
   };
 
-  // Aprobar proyecto
+  // *** APROBAR PROYECTO CON VERIFICACIÓN UNIFICADA ***
   const aprobarProyecto = async (userId: string) => {
     try {
+      if (!verificarToken()) return;
+      
       setLoading(true);
-      const response = await apiService.post(`/admin/approve/${userId}`, {});
+      console.log('✅ Aprobando proyecto:', userId);
+      
+      const response = await apiService.aprobarProyecto(userId);
+      console.log('📡 Respuesta de aprobación:', response);
       
       if (response.success) {
-        // Recargar lista
+        console.log('🎉 Proyecto aprobado exitosamente');
         await loadProyectos();
         alert('Proyecto aprobado exitosamente');
       } else {
-        alert(response.error || 'Error al aprobar proyecto');
+        console.error('❌ Error al aprobar:', response.error);
+        if (response.status === 401 || response.status === 403) {
+          alert('No tiene permisos para aprobar proyectos');
+        } else {
+          alert(response.error || 'Error al aprobar proyecto');
+        }
       }
     } catch (err) {
+      console.error('💥 Error de conexión al aprobar proyecto:', err);
       alert('Error de conexión al aprobar proyecto');
-      console.error('Error approving proyecto:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Rechazar proyecto
+  // *** RECHAZAR PROYECTO CON VERIFICACIÓN UNIFICADA ***
   const rechazarProyecto = async (userId: string) => {
     try {
+      if (!verificarToken()) return;
+      
       setLoading(true);
-      const response = await apiService.delete(`/admin/reject/${userId}`);
+      console.log('❌ Rechazando proyecto:', userId);
+      
+      const response = await apiService.rechazarProyecto(userId);
+      console.log('📡 Respuesta de rechazo:', response);
       
       if (response.success) {
-        // Recargar lista
+        console.log('✅ Proyecto rechazado exitosamente');
         await loadProyectos();
         alert('Proyecto rechazado exitosamente');
       } else {
-        alert(response.error || 'Error al rechazar proyecto');
+        console.error('❌ Error al rechazar:', response.error);
+        if (response.status === 401 || response.status === 403) {
+          alert('No tiene permisos para rechazar proyectos');
+        } else {
+          alert(response.error || 'Error al rechazar proyecto');
+        }
       }
     } catch (err) {
+      console.error('💥 Error de conexión al rechazar proyecto:', err);
       alert('Error de conexión al rechazar proyecto');
-      console.error('Error rejecting proyecto:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Crear nuevo proyecto
+  // *** CREAR PROYECTO CON VERIFICACIÓN UNIFICADA ***
   const crearProyecto = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -185,6 +251,8 @@ const Proyectos: React.FC = () => {
     }
     
     try {
+      if (!verificarToken()) return;
+      
       setLoading(true);
       const proyectoData = {
         nombre: newProyecto.nombre.trim(),
@@ -194,9 +262,13 @@ const Proyectos: React.FC = () => {
         categoria: newProyecto.categoria.trim() || undefined
       };
       
-      const response = await apiService.post('/api/proyectos', proyectoData);
+      console.log('➕ Creando proyecto:', proyectoData);
+      
+      const response = await apiService.createProyecto(proyectoData);
+      console.log('📡 Respuesta de creación:', response);
       
       if (response.success) {
+        console.log('🎉 Proyecto creado exitosamente');
         setShowModal(false);
         setNewProyecto({
           nombre: '',
@@ -208,11 +280,12 @@ const Proyectos: React.FC = () => {
         await loadProyectos();
         alert('Proyecto creado exitosamente');
       } else {
+        console.error('❌ Error al crear:', response.error);
         alert(response.error || 'Error al crear proyecto');
       }
     } catch (err) {
+      console.error('💥 Error de conexión al crear proyecto:', err);
       alert('Error de conexión al crear proyecto');
-      console.error('Error creating proyecto:', err);
     } finally {
       setLoading(false);
     }
@@ -246,13 +319,29 @@ const Proyectos: React.FC = () => {
     loadProyectos(0, pageSize, filterStatus);
   };
 
-  // Efecto para cargar datos iniciales
+  // *** EFECTO INICIAL CON DEBUGGING ***
   useEffect(() => {
+    console.log('🚀 Iniciando componente Proyectos...');
+    console.log('🔍 Estado inicial del token:', {
+      isAuthenticated: apiService.isAuthenticated(),
+      currentToken: apiService.getCurrentToken()?.substring(0, 50) + '...',
+      isExpired: apiService.isTokenExpired()
+    });
+    
+    // Verificar si hay token al cargar el componente
+    if (!verificarToken()) {
+      console.error('❌ No hay token válido, no se cargarán los proyectos');
+      return;
+    }
+    
+    // Si hay token, cargar proyectos
     loadProyectos();
   }, []);
 
   // Efecto para búsqueda con debounce
   useEffect(() => {
+    if (!apiService.isAuthenticated()) return;
+    
     const delayedSearch = setTimeout(() => {
       if (searchTerm !== '') {
         handleSearch();
@@ -297,10 +386,33 @@ const Proyectos: React.FC = () => {
         </p>
       </div>
 
-      {/* Mostrar error si existe */}
+      {/* *** MENSAJE DE ERROR MEJORADO *** */}
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <span className="text-lg mr-2">⚠️</span>
+              <span className="font-medium">{error}</span>
+            </div>
+            {error.includes('sesión') && (
+              <button 
+                onClick={() => {
+                  console.log('🔄 Recargando página...');
+                  window.location.reload();
+                }} 
+                className="ml-4 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+              >
+                Recargar página
+              </button>
+            )}
+          </div>
+          {/* Debug info solo en desarrollo */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-2 text-xs text-red-600">
+              <p>Debug: Token presente: {apiService.isAuthenticated() ? 'SÍ' : 'NO'}</p>
+              <p>Debug: Token expirado: {apiService.isTokenExpired() ? 'SÍ' : 'NO'}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -363,6 +475,7 @@ const Proyectos: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="proyectos-search-input"
+              disabled={!apiService.isAuthenticated()}
             />
           </div>
 
@@ -373,6 +486,7 @@ const Proyectos: React.FC = () => {
                 value={filterStatus}
                 onChange={(e) => handleFilterChange(e.target.value)}
                 className="proyectos-filter-select"
+                disabled={!apiService.isAuthenticated()}
               >
                 <option value="all">Todos los estados</option>
                 <option value="pendiente">Pendiente</option>
@@ -389,6 +503,7 @@ const Proyectos: React.FC = () => {
                 value={pageSize}
                 onChange={(e) => changePageSize(parseInt(e.target.value))}
                 className="proyectos-filter-select"
+                disabled={!apiService.isAuthenticated()}
               >
                 <option value={5}>5 por página</option>
                 <option value={10}>10 por página</option>
@@ -400,7 +515,7 @@ const Proyectos: React.FC = () => {
             <button
               onClick={() => setShowModal(true)}
               className="proyectos-add-button"
-              disabled={loading}
+              disabled={loading || !apiService.isAuthenticated()}
             >
               <Plus className="w-5 h-5" />
               <span>Nuevo Proyecto</span>
@@ -449,7 +564,7 @@ const Proyectos: React.FC = () => {
               <div>
                 <p className="proyectos-detail-label">Presupuesto</p>
                 <p className="proyectos-detail-value">
-                  {proyecto.presupuesto ? `$${proyecto.presupuesto.toLocaleString()}` : 'No especificado'}
+                  {proyecto.presupuesto ? `${proyecto.presupuesto.toLocaleString()}` : 'No especificado'}
                 </p>
               </div>
               <div>
@@ -471,7 +586,7 @@ const Proyectos: React.FC = () => {
                   <button 
                     onClick={() => aprobarProyecto(proyecto.id)}
                     className="proyectos-action-button bg-green-600 hover:bg-green-700 text-white"
-                    disabled={loading}
+                    disabled={loading || !apiService.isAuthenticated()}
                   >
                     <Check className="w-4 h-4" />
                     <span>Aprobar</span>
@@ -479,7 +594,7 @@ const Proyectos: React.FC = () => {
                   <button 
                     onClick={() => rechazarProyecto(proyecto.id)}
                     className="proyectos-action-button bg-red-600 hover:bg-red-700 text-white"
-                    disabled={loading}
+                    disabled={loading || !apiService.isAuthenticated()}
                   >
                     <X className="w-4 h-4" />
                     <span>Rechazar</span>
@@ -514,7 +629,9 @@ const Proyectos: React.FC = () => {
           <p className="text-gray-500">
             {searchTerm || filterStatus !== 'all' 
               ? 'No se encontraron proyectos con los filtros aplicados'
-              : 'Aún no hay proyectos registrados'
+              : error.includes('permisos') 
+                ? 'No tiene permisos para ver los proyectos'
+                : 'Aún no hay proyectos registrados'
             }
           </p>
         </div>
@@ -532,7 +649,7 @@ const Proyectos: React.FC = () => {
           <div className="proyectos-pagination-controls">
             <button
               onClick={() => changePage(currentPage - 1)}
-              disabled={currentPage === 0}
+              disabled={currentPage === 0 || !apiService.isAuthenticated()}
               className="proyectos-pagination-button"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -556,6 +673,7 @@ const Proyectos: React.FC = () => {
                   <button
                     key={pageNum}
                     onClick={() => changePage(pageNum)}
+                    disabled={!apiService.isAuthenticated()}
                     className={`proyectos-pagination-number ${
                       currentPage === pageNum ? 'active' : ''
                     }`}
@@ -568,7 +686,7 @@ const Proyectos: React.FC = () => {
 
             <button
               onClick={() => changePage(currentPage + 1)}
-              disabled={currentPage >= totalPages - 1}
+              disabled={currentPage >= totalPages - 1 || !apiService.isAuthenticated()}
               className="proyectos-pagination-button"
             >
               <span>Siguiente</span>
@@ -595,6 +713,7 @@ const Proyectos: React.FC = () => {
                   className="proyectos-form-input"
                   placeholder="Ingrese el nombre del proyecto"
                   required
+                  disabled={!apiService.isAuthenticated()}
                 />
               </div>
               
@@ -609,6 +728,7 @@ const Proyectos: React.FC = () => {
                   rows={3}
                   placeholder="Ingrese la descripción del proyecto"
                   required
+                  disabled={!apiService.isAuthenticated()}
                 ></textarea>
               </div>
               
@@ -622,6 +742,7 @@ const Proyectos: React.FC = () => {
                   onChange={(e) => setNewProyecto({...newProyecto, responsable: e.target.value})}
                   className="proyectos-form-input"
                   placeholder="Nombre del responsable"
+                  disabled={!apiService.isAuthenticated()}
                 />
               </div>
               
@@ -635,6 +756,7 @@ const Proyectos: React.FC = () => {
                   onChange={(e) => setNewProyecto({...newProyecto, categoria: e.target.value})}
                   className="proyectos-form-input"
                   placeholder="Categoría del proyecto"
+                  disabled={!apiService.isAuthenticated()}
                 />
               </div>
               
@@ -650,6 +772,7 @@ const Proyectos: React.FC = () => {
                   placeholder="0.00"
                   min="0"
                   step="0.01"
+                  disabled={!apiService.isAuthenticated()}
                 />
               </div>
               
@@ -665,7 +788,7 @@ const Proyectos: React.FC = () => {
                 <button
                   type="submit"
                   className="proyectos-submit-button"
-                  disabled={loading}
+                  disabled={loading || !apiService.isAuthenticated()}
                 >
                   {loading ? 'Creando...' : 'Crear Proyecto'}
                 </button>

@@ -1,23 +1,34 @@
-// components/login/LoginPage.tsx
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, ArrowRight, Wifi, WifiOff } from 'lucide-react';
 import { LoginPageProps, LoginRequest, ServerStatus } from './interfaces';
-import { ApiService } from './ApiService';
+import { ApiService } from './ApiService'; 
 import './login.scss';
 
-export class LoginPageController {
-  private apiService: ApiService;
+// *** CREAR INSTANCIA DEL SERVICIO ***
+const apiService = new ApiService();
 
+export class LoginPageController {
+  // *** USAR EL SERVICIO UNIFICADO EN LUGAR DE CREAR UNO NUEVO ***
   constructor() {
-    this.apiService = new ApiService();
+
   }
 
   public async checkServerHealth() {
-    return await this.apiService.healthCheck();
+    return await apiService.healthCheck();
   }
 
   public async performLogin(credentials: LoginRequest) {
-    return await this.apiService.login(credentials);
+    // *** CAPTURA Y PERSISTE EL TOKEN AUTOMÁTICAMENTE ***
+    console.log('🔐 Iniciando login con captura y persistencia automática de token...');
+    const result = await apiService.login(credentials);
+    
+    if (result.success && result.token) {
+      console.log('✅ Token capturado y persistido automáticamente durante el login');
+      console.log('🔑 Token preview:', result.token.substring(0, 50) + '...');
+      console.log('🗃️ Token guardado en memoria y sessionStorage para persistencia');
+    }
+    
+    return result;
   }
 
   public validateCredentials(username: string, password: string): string | null {
@@ -49,31 +60,42 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   // Instancia del controlador
   const [controller] = useState(() => new LoginPageController());
 
+  // *** VERIFICAR SI YA HAY UNA SESIÓN VÁLIDA AL CARGAR ***
+  useEffect(() => {
+    console.log('🔍 Verificando sesión existente...');
+    if (apiService.isAuthenticated()) {
+      console.log('✅ Sesión válida encontrada, usuario ya autenticado');
+      onLogin(true, apiService.getCurrentToken() || undefined);
+      return;
+    }
+    console.log('❌ No hay sesión válida, mostrando login');
+  }, [onLogin]);
+
   // Efecto para verificar conexión con el servidor
   useEffect(() => {
-  const checkServerConnection = async () => {
-    try {
-      setServerStatus('checking');
-      const healthCheck = await controller.checkServerHealth();
-      
-      if (healthCheck.success) {
-        setServerStatus('connected');
-        setError('');
-      } else {
+    const checkServerConnection = async () => {
+      try {
+        setServerStatus('checking');
+        const healthCheck = await controller.checkServerHealth();
+        
+        if (healthCheck.success) {
+          setServerStatus('connected');
+          setError('');
+        } else {
+          setServerStatus('disconnected');
+          // No mostrar errores de conexión automáticamente
+        }
+      } catch (err) {
+        console.error('Error al verificar conexión del servidor:', err);
         setServerStatus('disconnected');
         // No mostrar errores de conexión automáticamente
       }
-    } catch (err) {
-      console.error('Error al verificar conexión del servidor:', err);
-      setServerStatus('disconnected');
-      // No mostrar errores de conexión automáticamente
-    }
-  };
+    };
 
-  checkServerConnection();
-  const interval = setInterval(checkServerConnection, 15000);
-  return () => clearInterval(interval);
-}, [controller]);
+    checkServerConnection();
+    const interval = setInterval(checkServerConnection, 15000);
+    return () => clearInterval(interval);
+  }, [controller]);
 
   // Funciones de utilidad
   const handleImageError = (event: React.SyntheticEvent<HTMLImageElement, Event>): void => {
@@ -127,7 +149,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     }
   };
 
-  // Función principal de envío del formulario
+  // *** FUNCIÓN PRINCIPAL DE LOGIN CON PERSISTENCIA AUTOMÁTICA ***
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     setIsLoading(true);
@@ -155,15 +177,41 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         return;
       }
 
+      // *** EJECUTA EL LOGIN CON CAPTURA Y PERSISTENCIA AUTOMÁTICA DE TOKEN ***
+      console.log('🚀 Ejecutando login con captura y persistencia automática de token...');
       const response = await controller.performLogin(credentials);
       
       if (response.success) {
+        console.log('🎉 Login exitoso - Token capturado y persistido automáticamente');
+        console.log('🔍 Estado del token después del login:', {
+          tokenPresent: apiService.isAuthenticated(),
+          tokenPreview: apiService.getCurrentToken()?.substring(0, 50) + '...',
+          tokenPersisted: 'En memoria y sessionStorage'
+        });
+        
+        // *** VERIFICAR QUE EL TOKEN SE PERSISTIÓ CORRECTAMENTE ***
+        if (!apiService.isAuthenticated()) {
+          console.error('❌ Error: Token no se persistió correctamente');
+          setError('Error al persistir la sesión. Intente nuevamente.');
+          onLogin(false);
+          return;
+        }
+        
+        console.log('✅ Token persistido correctamente, redirigiendo...');
         onLogin(true, response.token);
+        
+        // Limpiar formulario tras login exitoso
+        setUsername('');
+        setPassword('');
+        
       } else {
+        console.error('❌ Login falló:', response.message);
         setError(response.message || 'Credenciales incorrectas');
         onLogin(false);
       }
     } catch (err) {
+      console.error('💥 Error durante el proceso de login:', err);
+      
       if (err instanceof Error) {
         if (err.message.includes('fetch') || err.message.includes('network')) {
           setError('Error de conexión. Verifique que el servidor esté disponible.');
@@ -325,7 +373,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             © 2025 GAD Municipal de Ibarra
           </p>
           <p className="version">
-            Versión 1.0.2
+            Versión 1.0.3 - 🔐 Token persistente
           </p>
         </div>
       </div>

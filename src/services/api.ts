@@ -89,108 +89,6 @@ export interface UpdateProyectoRequest extends Partial<CreateProyectoRequest> {
   estado?: string;
 }
 
-// Interfaces para otras entidades
-export interface Requerimiento {
-  id: string;
-  titulo: string;
-  descripcion: string;
-  estado: string;
-  fechaCreacion: string;
-  fechaActualizacion?: string;
-  usuario?: string;
-  prioridad?: 'alta' | 'media' | 'baja';
-  categoria?: string;
-}
-
-export interface CreateRequerimientoRequest {
-  titulo: string;
-  descripcion: string;
-  prioridad?: 'alta' | 'media' | 'baja';
-  categoria?: string;
-}
-
-export interface UpdateRequerimientoRequest extends Partial<CreateRequerimientoRequest> {
-  estado?: string;
-}
-
-export interface Mensaje {
-  id: string;
-  contenido: string;
-  remitente: string;
-  destinatario: string;
-  fechaEnvio: string;
-  leido: boolean;
-  asunto?: string;
-}
-
-export interface SendMensajeRequest {
-  contenido: string;
-  destinatario: string;
-  asunto?: string;
-}
-
-export interface Feria {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  fechaInicio: string;
-  fechaFin: string;
-  ubicacion: string;
-  estado: string;
-  organizador?: string;
-}
-
-export interface CreateFeriaRequest {
-  nombre: string;
-  descripcion: string;
-  fechaInicio: string;
-  fechaFin: string;
-  ubicacion: string;
-  organizador?: string;
-}
-
-export interface LocalComercial {
-  id: string;
-  nombre: string;
-  direccion: string;
-  propietario: string;
-  telefono?: string;
-  email?: string;
-  tipoNegocio: string;
-  estado: string;
-  fechaRegistro: string;
-  licencia?: string;
-}
-
-export interface CreateLocalComercialRequest {
-  nombre: string;
-  direccion: string;
-  propietario: string;
-  telefono?: string;
-  email?: string;
-  tipoNegocio: string;
-  licencia?: string;
-}
-
-export interface DashboardData {
-  totalRequerimientos: number;
-  totalProyectos: number;
-  totalFerias: number;
-  totalLocalesComerciales: number;
-  requerimientosRecientes: Requerimiento[];
-  mensajesNoLeidos: number;
-  estadisticas: {
-    requerimientosPorEstado: Record<string, number>;
-    proyectosPorEstado: Record<string, number>;
-    feriasPorMes: Record<string, number>;
-  };
-  actividadReciente: Array<{
-    tipo: string;
-    descripcion: string;
-    fecha: string;
-  }>;
-}
-
 export interface HealthCheckResponse {
   status: string;
   timestamp: string;
@@ -217,23 +115,21 @@ class ApiService {
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
-    this.loadAuthToken();
+    // NO cargar token desde ningún lado - empezar sin token
   }
 
-  // Método para cargar el token de autenticación desde memoria
-  private loadAuthToken(): void {
-    // Por defecto usar el token proporcionado o null para login dinámico
-    this.authToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJBVVRIMEpXVC1KVVNUSU5ERVYtQkFDS0VORCIsInN1YiI6ImFkbWluQG1haWwuY29tIiwicm9sZXMiOiJST0xFX0FETUlOIiwiaWF0IjoxNzU0MDg3OTYwLCJleHAiOjE3NTQwODk3NjAsImp0aSI6IjRiNTVhZDdjLTc3OTMtNDBmYi1hNWNmLTRlYjdjN2MyZDA4ZiIsIm5iZiI6MTc1NDA4Nzk2MH0.wHBondKwwKzvwvR9P1M8Kbiu3PXQbas0xS9QXa9J7pA';
-  }
-
+  // *** MÉTODOS DE GESTIÓN DE TOKEN ACTUALIZADOS ***
+  
   // Método para guardar el token de autenticación
   private saveAuthToken(token: string): void {
     this.authToken = token;
+    console.log('🔐 Token guardado exitosamente en memoria');
   }
 
   // Método para limpiar el token de autenticación
   private clearAuthToken(): void {
     this.authToken = null;
+    console.log('🗑️ Token eliminado de memoria');
   }
 
   // Método para obtener el token de autenticación
@@ -327,6 +223,7 @@ class ApiService {
 
       console.log(`🌐 Petición a: ${url}`);
       console.log(`⚙️ Método: ${config.method || 'GET'}`);
+      console.log(`🔑 Token presente: ${this.getAuthToken() ? 'SÍ' : 'NO'}`);
 
       let response: Response;
       
@@ -400,6 +297,7 @@ class ApiService {
       
       // Manejo específico de códigos de error
       if (response.status === 401) {
+        console.warn('🚫 Token expirado o inválido, limpiando...');
         this.clearAuthToken();
         return {
           success: false,
@@ -481,7 +379,7 @@ class ApiService {
     }
   }
 
-  // Método de autenticación mejorado
+  // *** MÉTODO DE AUTENTICACIÓN MEJORADO PARA CAPTURAR TOKEN ***
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
       console.log('🔐 Iniciando proceso de login...');
@@ -528,6 +426,8 @@ class ApiService {
       
       for (const endpoint of loginEndpoints) {
         try {
+          console.log(`🎯 Probando endpoint: ${this.baseUrl}${endpoint}`);
+          
           const response = await fetch(`${this.baseUrl}${endpoint}`, {
             method: 'POST',
             headers: {
@@ -539,24 +439,48 @@ class ApiService {
             credentials: 'include',
           });
 
+          console.log(`📡 Status: ${response.status}`);
+
           if (response.status === 404 || response.status === 405) {
+            console.log(`⏭️ Endpoint ${endpoint} no disponible, continuando...`);
             continue;
           }
 
           let responseData: ServerResponse = {};
           try {
             const responseText = await response.text();
+            console.log(`📄 Response text: ${responseText.substring(0, 300)}`);
+            
             if (responseText.trim()) {
               responseData = JSON.parse(responseText) as ServerResponse;
             }
-          } catch {
+          } catch (parseError) {
+            console.error('❌ Error parseando respuesta:', parseError);
             responseData = { message: 'Error al procesar respuesta del servidor' };
           }
           
-          // Login exitoso
+          // *** LOGIN EXITOSO - CAPTURAR TOKEN ***
           if (response.ok) {
+            console.log('🎉 Login exitoso!');
+            
+            // Buscar token en múltiples ubicaciones posibles
             const token = (responseData as Record<string, unknown>).token as string || 
-                         (responseData as Record<string, unknown>).accessToken as string;
+                         (responseData as Record<string, unknown>).accessToken as string ||
+                         (responseData as Record<string, unknown>).access_token as string ||
+                         (responseData as Record<string, unknown>).authToken as string ||
+                         (responseData as Record<string, unknown>).jwt as string ||
+                         response.headers.get('Authorization') ||
+                         response.headers.get('X-Auth-Token');
+            
+            // *** GUARDAR EL TOKEN AUTOMÁTICAMENTE ***
+            if (token) {
+              this.saveAuthToken(token);
+              console.log('✅ Token capturado y guardado automáticamente');
+              console.log('🔑 Token preview:', token.substring(0, 50) + '...');
+            } else {
+              console.warn('⚠️ No se encontró token en la respuesta del login');
+              console.log('📊 Datos de respuesta:', responseData);
+            }
             
             const userObj = (responseData as Record<string, unknown>).user as Record<string, unknown> || {};
             const user: User = {
@@ -572,10 +496,6 @@ class ApiService {
                     userObj.role || 
                     'user') as string,
             };
-            
-            if (token) {
-              this.saveAuthToken(token);
-            }
             
             return {
               success: true,
@@ -593,8 +513,11 @@ class ApiService {
             };
           }
           
+          // Para otros errores, continuar con el siguiente endpoint
+          console.log(`❌ Error ${response.status}, probando siguiente endpoint...`);
+          
         } catch (endpointError) {
-          console.error(`Error con endpoint ${endpoint}:`, endpointError);
+          console.error(`💥 Error con endpoint ${endpoint}:`, endpointError);
           continue;
         }
       }
@@ -604,7 +527,8 @@ class ApiService {
         message: 'Error en el proceso de autenticación',
       };
       
-    } catch {
+    } catch (loginError) {
+      console.error('💥 Error general de login:', loginError);
       return {
         success: false,
         message: 'Error de conexión con el servidor',
@@ -612,7 +536,7 @@ class ApiService {
     }
   }
 
-  // Método de logout
+  // Método de logout que limpia el token
   async logout(): Promise<ApiResponse<void>> {
     try {
       const result = await this.request<void>('/auth/logout', {
@@ -759,111 +683,25 @@ class ApiService {
     return this.delete<void>(`/api/proyectos/${id}`);
   }
 
-  // ========== MÉTODOS PARA OTRAS ENTIDADES ==========
-
-  // Requerimientos
-  async getRequerimientos(page: number = 0, size: number = 10): Promise<ApiResponse<PaginatedResponse<Requerimiento>>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      size: size.toString()
-    });
-    return this.get<PaginatedResponse<Requerimiento>>(`/api/requerimientos?${params.toString()}`);
-  }
-
-  async getRequerimiento(id: string): Promise<ApiResponse<Requerimiento>> {
-    return this.get<Requerimiento>(`/api/requerimientos/${id}`);
-  }
-
-  async createRequerimiento(data: CreateRequerimientoRequest): Promise<ApiResponse<Requerimiento>> {
-    return this.post<Requerimiento>('/api/requerimientos', data);
-  }
-
-  async updateRequerimiento(id: string, data: UpdateRequerimientoRequest): Promise<ApiResponse<Requerimiento>> {
-    return this.put<Requerimiento>(`/api/requerimientos/${id}`, data);
-  }
-
-  async deleteRequerimiento(id: string): Promise<ApiResponse<void>> {
-    return this.delete<void>(`/api/requerimientos/${id}`);
-  }
-
-  // Mensajería
-  async getMensajes(): Promise<ApiResponse<Mensaje[]>> {
-    return this.get<Mensaje[]>('/api/mensajes');
-  }
-
-  async getMensaje(id: string): Promise<ApiResponse<Mensaje>> {
-    return this.get<Mensaje>(`/api/mensajes/${id}`);
-  }
-
-  async sendMensaje(data: SendMensajeRequest): Promise<ApiResponse<Mensaje>> {
-    return this.post<Mensaje>('/api/mensajes', data);
-  }
-
-  async markMensajeAsRead(id: string): Promise<ApiResponse<void>> {
-    return this.patch<void>(`/api/mensajes/${id}/read`, {});
-  }
-
-  // Ferias
-  async getFerias(): Promise<ApiResponse<Feria[]>> {
-    return this.get<Feria[]>('/api/ferias');
-  }
-
-  async getFeria(id: string): Promise<ApiResponse<Feria>> {
-    return this.get<Feria>(`/api/ferias/${id}`);
-  }
-
-  async createFeria(data: CreateFeriaRequest): Promise<ApiResponse<Feria>> {
-    return this.post<Feria>('/api/ferias', data);
-  }
-
-  async updateFeria(id: string, data: Partial<CreateFeriaRequest>): Promise<ApiResponse<Feria>> {
-    return this.put<Feria>(`/api/ferias/${id}`, data);
-  }
-
-  async deleteFeria(id: string): Promise<ApiResponse<void>> {
-    return this.delete<void>(`/api/ferias/${id}`);
-  }
-
-  // Locales Comerciales
-  async getLocalesComerciales(): Promise<ApiResponse<LocalComercial[]>> {
-    return this.get<LocalComercial[]>('/api/locales-comerciales');
-  }
-
-  async getLocalComercial(id: string): Promise<ApiResponse<LocalComercial>> {
-    return this.get<LocalComercial>(`/api/locales-comerciales/${id}`);
-  }
-
-  async createLocalComercial(data: CreateLocalComercialRequest): Promise<ApiResponse<LocalComercial>> {
-    return this.post<LocalComercial>('/api/locales-comerciales', data);
-  }
-
-  async updateLocalComercial(id: string, data: Partial<CreateLocalComercialRequest>): Promise<ApiResponse<LocalComercial>> {
-    return this.put<LocalComercial>(`/api/locales-comerciales/${id}`, data);
-  }
-
-  async deleteLocalComercial(id: string): Promise<ApiResponse<void>> {
-    return this.delete<void>(`/api/locales-comerciales/${id}`);
-  }
-
-  // Dashboard
-  async getDashboardData(): Promise<ApiResponse<DashboardData>> {
-    return this.get<DashboardData>('/api/dashboard');
-  }
-
-  // Métodos de utilidad
+  // ========== MÉTODOS DE UTILIDAD PARA TOKEN ==========
+  
+  // Verificar si hay token válido
   isAuthenticated(): boolean {
     return this.getAuthToken() !== null;
   }
 
+  // Obtener token actual (para debugging)
   getCurrentToken(): string | null {
     return this.getAuthToken();
   }
 
+  // Establecer token manualmente (si es necesario)
   setToken(token: string): void {
     this.saveAuthToken(token);
   }
 
-clearToken(): void {
+  // Limpiar token manualmente
+  clearToken(): void {
     this.clearAuthToken();
   }
 
@@ -889,12 +727,8 @@ clearToken(): void {
 
   // Método para refrescar el token
   refreshToken(): void {
-    console.log('🔄 Refrescando token de autenticación...');
-
+    console.log('🔄 Token expirado, es necesario hacer login nuevamente...');
     this.clearAuthToken();
-    
-    // Redirigir al login o mostrar mensaje
-    console.log('⚠️ Token expirado. Es necesario autenticarse nuevamente.');
   }
 }
 

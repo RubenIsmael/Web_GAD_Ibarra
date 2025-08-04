@@ -1,4 +1,3 @@
-// components/login/interfaces.ts
 export interface LoginRequest {
   username: string;
   password: string;
@@ -23,6 +22,7 @@ export interface ApiResponse<T = Record<string, unknown>> {
   data?: T;
   message?: string;
   error?: string;
+  status?: number; 
 }
 
 export interface LoginPageProps {
