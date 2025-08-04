@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FolderOpen, Plus, Search, Filter, Calendar, User, TrendingUp, Eye, Edit, Trash2, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ApiService } from './login/ApiService'; 
 import '../styles/proyectos.css';
 
-// *** CREAR INSTANCIA DEL SERVICIO ***
+// Usar la misma instancia global del servicio
 const apiService = new ApiService();
 
 // Interfaces actualizadas basadas en la API
@@ -11,30 +11,13 @@ interface ProyectoAPI {
   id: string;
   nombre: string;
   descripcion: string;
-  estado: 'pendiente' | 'aprobado' | 'rechazado' | 'en-progreso' | 'completado';
-  fechaEnvio: string;
-  responsable: string;
+  estado?: 'pendiente' | 'aprobado' | 'rechazado' | 'en-progreso' | 'completado';
+  fechaEnvio?: string;
+  responsable?: string;
   presupuesto?: number;
   categoria?: string;
   fechaInicio?: string;
   fechaFin?: string;
-}
-
-// *** ELIMINAR PaginatedResponse SI NO SE USA O UTILIZARLA ***
-interface PaginatedResponse {
-  content: ProyectoAPI[];
-  totalElements: number;
-  totalPages: number;
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-  };
-  empty: boolean;
-  sort: {
-    sorted: boolean;
-    empty: boolean;
-    unsorted: boolean;
-  };
 }
 
 interface ProyectoStats {
@@ -68,6 +51,7 @@ const Proyectos: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState<string>('');
+  const [renderError, setRenderError] = useState<string>('');
   
   // Estados para nuevo proyecto
   const [newProyecto, setNewProyecto] = useState({
@@ -78,13 +62,22 @@ const Proyectos: React.FC = () => {
     categoria: ''
   });
 
-  // *** FUNCIÓN MEJORADA PARA VERIFICAR TOKEN ***
+  // Estados para modales
+  const [selectedProyecto, setSelectedProyecto] = useState<ProyectoAPI | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Función unificada para verificar token
   const verificarToken = (): boolean => {
     console.log('🔍 Verificando estado de autenticación...');
-    console.log('🔑 Token actual:', apiService.getCurrentToken()?.substring(0, 50) + '...');
-    console.log('✅ ¿Está autenticado?:', apiService.isAuthenticated());
     
-    if (!apiService.isAuthenticated()) {
+    const token = apiService.getCurrentToken();
+    const isAuth = apiService.isAuthenticated();
+    
+    console.log('🔑 Token actual:', token ? `${token.substring(0, 50)}...` : 'NO HAY TOKEN');
+    console.log('✅ ¿Está autenticado?:', isAuth);
+    
+    if (!isAuth || !token) {
       console.error('❌ No hay token de autenticación válido');
       setError('Sesión expirada. Por favor, inicie sesión nuevamente.');
       return false;
@@ -102,56 +95,68 @@ const Proyectos: React.FC = () => {
     return true;
   };
 
-  // *** CARGAR PROYECTOS CON VERIFICACIÓN DE TOKEN UNIFICADA ***
-  const loadProyectos = async (page: number = currentPage, size: number = pageSize, status: string = filterStatus) => {
+  // Cargar proyectos con verificación de token mejorada
+  const loadProyectos = async (page: number = currentPage, size: number = pageSize) => {
     try {
       setLoading(true);
       setError('');
       
       console.log('🚀 Iniciando carga de proyectos...');
       
-      // *** VERIFICAR TOKEN ANTES DE HACER LA PETICIÓN ***
+      // Verificar token antes de hacer la petición
       if (!verificarToken()) {
         setLoading(false);
         return;
       }
       
-      console.log('📊 Parámetros de consulta:', { page, size, status, searchTerm });
+      console.log('📊 Parámetros de consulta:', { page, size, searchTerm });
       
-      // *** USAR MÉTODO ESPECÍFICO PARA PROYECTOS PENDIENTES ***
-      let response: { success: boolean; data?: PaginatedResponse; error?: string; message?: string; status?: number };
-      
-      if (status === 'all' || status === 'pendiente') {
-        console.log('🔍 Usando endpoint de proyectos pendientes...');
-        response = await apiService.getProyectosPendientes(page, size);
-      } else {
-        console.log('🔍 Usando endpoint general de proyectos...');
-        response = await apiService.getProyectos(page, size, status, searchTerm);
-      }
+      // Usar endpoints corregidos basados en swagger
+      // Siempre usar el endpoint de proyectos pendientes para obtener datos reales
+      console.log('🔍 Usando endpoint de proyectos pendientes...');
+      const response = await apiService.getProyectosPendientes(page, size);
       
       console.log('📡 Respuesta de la API:', response);
       
       if (response.success && response.data) {
         console.log('✅ Proyectos cargados exitosamente');
         console.log('📋 Cantidad de proyectos:', response.data.content.length);
+        console.log('🔍 Datos de proyectos recibidos:', response.data.content);
         
-        setProyectos(response.data.content);
+        // Validar y limpiar datos antes de setear
+        const proyectosLimpios = response.data.content.filter(proyecto => {
+          if (!proyecto || !proyecto.id) {
+            console.warn('⚠️ Proyecto filtrado por datos incompletos:', proyecto);
+            return false;
+          }
+          return true;
+        });
+        
+        console.log('📋 Proyectos después del filtrado:', proyectosLimpios.length);
+        
+        setProyectos(proyectosLimpios);
         setTotalPages(response.data.totalPages);
         setTotalElements(response.data.totalElements);
         setCurrentPage(response.data.pageable.pageNumber);
         
+        // Limpiar error de renderizado cuando carga exitosa
+        setRenderError('');
+        
         // Calcular estadísticas
-        calculateStats(response.data.content, response.data.totalElements);
+        calculateStats(proyectosLimpios, response.data.totalElements);
         
       } else {
         console.error('❌ Error en respuesta:', response.error || response.message);
         
-        // *** MANEJAR ERRORES DE AUTENTICACIÓN ESPECÍFICAMENTE ***
+        // Manejar errores de autenticación específicamente
         if (response.status === 401) {
           setError('Su sesión ha expirado. Por favor, inicie sesión nuevamente.');
           apiService.clearToken();
+          window.location.reload();
         } else if (response.status === 403) {
           setError('No tiene permisos para ver los proyectos. Contacte al administrador.');
+        } else if (response.status === 404) {
+          setError('Endpoint no encontrado. Verifique la configuración del servidor.');
         } else {
           setError(response.error || response.message || 'Error al cargar proyectos');
         }
@@ -159,7 +164,19 @@ const Proyectos: React.FC = () => {
       }
     } catch (err) {
       console.error('💥 Error de conexión al cargar proyectos:', err);
-      setError('Error de conexión al cargar proyectos');
+      
+      // Manejo mejorado de errores de red
+      if (err instanceof Error) {
+        if (err.message.includes('fetch') || err.message.includes('Failed to fetch')) {
+          setError('Error de conexión. Verifique que el servidor esté disponible.');
+        } else if (err.message.includes('timeout') || err.message.includes('AbortError')) {
+          setError('La conexión tardó demasiado tiempo. Intente nuevamente.');
+        } else {
+          setError(`Error de conexión: ${err.message}`);
+        }
+      } else {
+        setError('Error de conexión al cargar proyectos. Verifique su conexión a internet.');
+      }
     } finally {
       setLoading(false);
     }
@@ -179,7 +196,7 @@ const Proyectos: React.FC = () => {
     });
   };
 
-  // *** APROBAR PROYECTO CON VERIFICACIÓN UNIFICADA ***
+  // Aprobar proyecto con verificación mejorada
   const aprobarProyecto = async (userId: string) => {
     try {
       if (!verificarToken()) return;
@@ -196,8 +213,13 @@ const Proyectos: React.FC = () => {
         alert('Proyecto aprobado exitosamente');
       } else {
         console.error('❌ Error al aprobar:', response.error);
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
+          setError('Su sesión ha expirado. Recargue la página e inicie sesión nuevamente.');
+          apiService.clearToken();
+        } else if (response.status === 403) {
           alert('No tiene permisos para aprobar proyectos');
+        } else if (response.status === 404) {
+          alert('Proyecto no encontrado o endpoint no disponible');
         } else {
           alert(response.error || 'Error al aprobar proyecto');
         }
@@ -210,7 +232,7 @@ const Proyectos: React.FC = () => {
     }
   };
 
-  // *** RECHAZAR PROYECTO CON VERIFICACIÓN UNIFICADA ***
+  // Rechazar proyecto con verificación mejorada
   const rechazarProyecto = async (userId: string) => {
     try {
       if (!verificarToken()) return;
@@ -227,8 +249,13 @@ const Proyectos: React.FC = () => {
         alert('Proyecto rechazado exitosamente');
       } else {
         console.error('❌ Error al rechazar:', response.error);
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
+          setError('Su sesión ha expirado. Recargue la página e inicie sesión nuevamente.');
+          apiService.clearToken();
+        } else if (response.status === 403) {
           alert('No tiene permisos para rechazar proyectos');
+        } else if (response.status === 404) {
+          alert('Proyecto no encontrado o endpoint no disponible');
         } else {
           alert(response.error || 'Error al rechazar proyecto');
         }
@@ -241,7 +268,7 @@ const Proyectos: React.FC = () => {
     }
   };
 
-  // *** CREAR PROYECTO CON VERIFICACIÓN UNIFICADA ***
+  // Crear proyecto con verificación mejorada
   const crearProyecto = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -281,7 +308,12 @@ const Proyectos: React.FC = () => {
         alert('Proyecto creado exitosamente');
       } else {
         console.error('❌ Error al crear:', response.error);
-        alert(response.error || 'Error al crear proyecto');
+        if (response.status === 401) {
+          setError('Su sesión ha expirado. Recargue la página e inicie sesión nuevamente.');
+          apiService.clearToken();
+        } else {
+          alert(response.error || 'Error al crear proyecto');
+        }
       }
     } catch (err) {
       console.error('💥 Error de conexión al crear proyecto:', err);
@@ -295,7 +327,7 @@ const Proyectos: React.FC = () => {
   const changePage = (newPage: number) => {
     if (newPage >= 0 && newPage < totalPages) {
       setCurrentPage(newPage);
-      loadProyectos(newPage, pageSize, filterStatus);
+      loadProyectos(newPage, pageSize);
     }
   };
 
@@ -303,23 +335,23 @@ const Proyectos: React.FC = () => {
   const changePageSize = (newSize: number) => {
     setPageSize(newSize);
     setCurrentPage(0);
-    loadProyectos(0, newSize, filterStatus);
+    loadProyectos(0, newSize);
   };
 
   // Filtrar por estado
   const handleFilterChange = (newFilter: string) => {
     setFilterStatus(newFilter);
     setCurrentPage(0);
-    loadProyectos(0, pageSize, newFilter);
+    loadProyectos(0, pageSize);
   };
 
   // Buscar proyectos
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     setCurrentPage(0);
-    loadProyectos(0, pageSize, filterStatus);
-  };
+    loadProyectos(0, pageSize);
+  }, [pageSize]);
 
-  // *** EFECTO INICIAL CON DEBUGGING ***
+  // Efecto inicial con debugging mejorado
   useEffect(() => {
     console.log('🚀 Iniciando componente Proyectos...');
     console.log('🔍 Estado inicial del token:', {
@@ -328,14 +360,23 @@ const Proyectos: React.FC = () => {
       isExpired: apiService.isTokenExpired()
     });
     
-    // Verificar si hay token al cargar el componente
-    if (!verificarToken()) {
-      console.error('❌ No hay token válido, no se cargarán los proyectos');
-      return;
-    }
+    // Verificar token de manera más robusta
+    const inicializar = async () => {
+      // Dar tiempo para que se inicialice el token si viene de login
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!verificarToken()) {
+        console.error('❌ No hay token válido, no se cargarán los proyectos');
+        setError('No hay sesión válida. Por favor, inicie sesión.');
+        return;
+      }
+      
+      // Si hay token, cargar proyectos
+      console.log('✅ Token válido encontrado, cargando proyectos...');
+      loadProyectos();
+    };
     
-    // Si hay token, cargar proyectos
-    loadProyectos();
+    inicializar();
   }, []);
 
   // Efecto para búsqueda con debounce
@@ -349,9 +390,11 @@ const Proyectos: React.FC = () => {
     }, 500);
 
     return () => clearTimeout(delayedSearch);
-  }, [searchTerm]);
+  }, [searchTerm, handleSearch]);
 
-  const getStatusColor = (estado: string) => {
+  const getStatusColor = (estado: string | undefined) => {
+    if (!estado) return 'bg-gray-100 text-gray-800';
+    
     switch (estado) {
       case 'pendiente': return 'bg-yellow-100 text-yellow-800';
       case 'aprobado': return 'bg-green-100 text-green-800';
@@ -362,7 +405,9 @@ const Proyectos: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'Fecha no disponible';
+    
     try {
       return new Date(dateString).toLocaleDateString('es-ES', {
         year: 'numeric',
@@ -371,6 +416,196 @@ const Proyectos: React.FC = () => {
       });
     } catch {
       return dateString;
+    }
+  };
+
+  const formatEstadoText = (estado: string | undefined) => {
+    if (!estado) return 'Sin estado';
+    return estado.charAt(0).toUpperCase() + estado.slice(1).replace('-', ' ');
+  };
+
+  // Función para renderizar proyectos de forma segura
+  const renderProyectos = () => {
+    try {
+      return proyectos.map((proyecto) => {
+        // Validación de datos del proyecto
+        if (!proyecto || !proyecto.id) {
+          console.warn('⚠️ Proyecto con datos incompletos:', proyecto);
+          return null;
+        }
+
+        // Determinar el estado real del proyecto
+        const estadoProyecto = proyecto.estado || 'pendiente';
+        const nombreProyecto = proyecto.nombre && proyecto.nombre.trim() !== '' ? proyecto.nombre : `Proyecto #${proyecto.id}`;
+        const descripcionProyecto = proyecto.descripcion && proyecto.descripcion.trim() !== '' ? proyecto.descripcion : 'Descripción no disponible';
+
+        return (
+          <div key={proyecto.id} className="proyectos-card">
+            <div className="proyectos-card-header">
+              <div className="proyectos-card-title-group">
+                <div className="proyectos-card-icon">
+                  <FolderOpen />
+                </div>
+                <div>
+                  <h3 className="proyectos-card-name">{nombreProyecto}</h3>
+                  <p className="proyectos-card-category">{proyecto.categoria || 'General'}</p>
+                </div>
+              </div>
+              <span className={`proyectos-card-status ${getStatusColor(estadoProyecto)}`}>
+                {formatEstadoText(estadoProyecto)}
+              </span>
+            </div>
+
+            <p className="proyectos-card-description">{descripcionProyecto}</p>
+
+            <div className="proyectos-details-grid">
+              <div>
+                <p className="proyectos-detail-label">Responsable</p>
+                <p className="proyectos-detail-value">
+                  <User className="proyectos-detail-icon" />
+                  {proyecto.responsable || 'No asignado'}
+                </p>
+              </div>
+              <div>
+                <p className="proyectos-detail-label">Presupuesto</p>
+                <p className="proyectos-detail-value">
+                  {proyecto.presupuesto ? `$${proyecto.presupuesto.toLocaleString()}` : 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <p className="proyectos-detail-label">Fecha de Envío</p>
+                <p className="proyectos-detail-value">
+                  <Calendar className="proyectos-detail-icon" />
+                  {formatDate(proyecto.fechaEnvio)}
+                </p>
+              </div>
+              <div>
+                <p className="proyectos-detail-label">ID</p>
+                <p className="proyectos-detail-value">#{proyecto.id}</p>
+              </div>
+            </div>
+
+            <div className="proyectos-card-footer">
+              {estadoProyecto === 'pendiente' ? (
+                <>
+                  <button 
+                    onClick={() => aprobarProyecto(proyecto.id)}
+                    className="proyectos-action-button bg-green-600 hover:bg-green-700 text-white"
+                    disabled={loading || !apiService.isAuthenticated()}
+                    title="Aprobar proyecto"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Aprobar</span>
+                  </button>
+                  <button 
+                    onClick={() => rechazarProyecto(proyecto.id)}
+                    className="proyectos-action-button bg-red-600 hover:bg-red-700 text-white"
+                    disabled={loading || !apiService.isAuthenticated()}
+                    title="Rechazar proyecto"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>Rechazar</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => {
+                      setSelectedProyecto(proyecto);
+                      setShowViewModal(true);
+                    }}
+                    className="proyectos-action-button bg-blue-600 hover:bg-blue-700 text-white"
+                    title="Ver detalles del proyecto"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>Ver</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setSelectedProyecto(proyecto);
+                      setNewProyecto({
+                        nombre: proyecto.nombre || '',
+                        descripcion: proyecto.descripcion || '',
+                        responsable: proyecto.responsable || '',
+                        presupuesto: proyecto.presupuesto?.toString() || '',
+                        categoria: proyecto.categoria || ''
+                      });
+                      setShowEditModal(true);
+                    }}
+                    className="proyectos-action-button bg-yellow-600 hover:bg-yellow-700 text-white"
+                    title="Editar proyecto"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Editar</span>
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      if (!window.confirm('¿Está seguro que desea eliminar este proyecto? Esta acción no se puede deshacer.')) {
+                        return;
+                      }
+
+                      try {
+                        if (!verificarToken()) return;
+                        
+                        setLoading(true);
+                        console.log('🗑️ Eliminando proyecto:', proyecto.id);
+                        
+                        const response = await apiService.deleteProyecto(proyecto.id);
+                        console.log('📡 Respuesta de eliminación:', response);
+                        
+                        if (response.success) {
+                          console.log('🎉 Proyecto eliminado exitosamente');
+                          await loadProyectos();
+                          alert('Proyecto eliminado exitosamente');
+                        } else {
+                          console.error('❌ Error al eliminar:', response.error);
+                          if (response.status === 401) {
+                            setError('Su sesión ha expirado. Recargue la página e inicie sesión nuevamente.');
+                            apiService.clearToken();
+                          } else if (response.status === 403) {
+                            alert('No tiene permisos para eliminar proyectos');
+                          } else if (response.status === 404) {
+                            alert('Proyecto no encontrado');
+                          } else {
+                            alert(response.error || 'Error al eliminar proyecto');
+                          }
+                        }
+                      } catch (err) {
+                        console.error('💥 Error de conexión al eliminar proyecto:', err);
+                        alert('Error de conexión al eliminar proyecto');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="proyectos-action-button bg-red-600 hover:bg-red-700 text-white"
+                    title="Eliminar proyecto"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Eliminar</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }).filter(Boolean);
+    } catch (renderErr) {
+      console.error('💥 Error al renderizar proyectos:', renderErr);
+      
+      // Solo actualizar el estado si realmente ha cambiado para evitar loops
+      const errorMessage = renderErr instanceof Error ? renderErr.message : 'Error desconocido';
+      if (renderError !== errorMessage) {
+        // Usar setTimeout para evitar actualizar estado durante render
+        setTimeout(() => {
+          setRenderError(errorMessage);
+        }, 0);
+      }
+      
+      return [
+        <div key="error" className="col-span-full text-center py-8">
+          <p className="text-red-600">Error al mostrar los proyectos. Revise la consola para más detalles.</p>
+        </div>
+      ];
     }
   };
 
@@ -386,7 +621,7 @@ const Proyectos: React.FC = () => {
         </p>
       </div>
 
-      {/* *** MENSAJE DE ERROR MEJORADO *** */}
+      {/* Mensaje de error mejorado con más contexto */}
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           <div className="flex items-center justify-between">
@@ -394,23 +629,37 @@ const Proyectos: React.FC = () => {
               <span className="text-lg mr-2">⚠️</span>
               <span className="font-medium">{error}</span>
             </div>
-            {error.includes('sesión') && (
+            <div className="flex gap-2">
+              {error.includes('sesión') && (
+                <button 
+                  onClick={() => {
+                    console.log('🔄 Recargando página...');
+                    window.location.reload();
+                  }} 
+                  className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+                >
+                  Recargar página
+                </button>
+              )}
               <button 
                 onClick={() => {
-                  console.log('🔄 Recargando página...');
-                  window.location.reload();
+                  setError('');
+                  if (apiService.isAuthenticated()) {
+                    loadProyectos();
+                  }
                 }} 
-                className="ml-4 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
               >
-                Recargar página
+                Reintentar
               </button>
-            )}
+            </div>
           </div>
           {/* Debug info solo en desarrollo */}
           {process.env.NODE_ENV === 'development' && (
             <div className="mt-2 text-xs text-red-600">
               <p>Debug: Token presente: {apiService.isAuthenticated() ? 'SÍ' : 'NO'}</p>
               <p>Debug: Token expirado: {apiService.isTokenExpired() ? 'SÍ' : 'NO'}</p>
+              <p>Debug: Token preview: {apiService.getCurrentToken()?.substring(0, 30) + '...' || 'N/A'}</p>
             </div>
           )}
         </div>
@@ -475,7 +724,7 @@ const Proyectos: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="proyectos-search-input"
-              disabled={!apiService.isAuthenticated()}
+              disabled={!apiService.isAuthenticated() || loading}
             />
           </div>
 
@@ -486,7 +735,7 @@ const Proyectos: React.FC = () => {
                 value={filterStatus}
                 onChange={(e) => handleFilterChange(e.target.value)}
                 className="proyectos-filter-select"
-                disabled={!apiService.isAuthenticated()}
+                disabled={!apiService.isAuthenticated() || loading}
               >
                 <option value="all">Todos los estados</option>
                 <option value="pendiente">Pendiente</option>
@@ -503,7 +752,7 @@ const Proyectos: React.FC = () => {
                 value={pageSize}
                 onChange={(e) => changePageSize(parseInt(e.target.value))}
                 className="proyectos-filter-select"
-                disabled={!apiService.isAuthenticated()}
+                disabled={!apiService.isAuthenticated() || loading}
               >
                 <option value={5}>5 por página</option>
                 <option value={10}>10 por página</option>
@@ -524,174 +773,139 @@ const Proyectos: React.FC = () => {
         </div>
       </div>
 
-      {/* Indicador de carga */}
+      {/* Indicador de carga mejorado */}
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-          <span className="ml-2 text-gray-600">Cargando...</span>
+          <span className="ml-2 text-gray-600">
+            {proyectos.length === 0 ? 'Cargando proyectos...' : 'Actualizando...'}
+          </span>
         </div>
       )}
 
+      {/* Error de renderizado */}
+      {renderError && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="flex items-center">
+            <span className="text-lg mr-2">💥</span>
+            <span>Error al renderizar proyectos: {renderError}</span>
+          </div>
+        </div>
+      )}
+      
       {/* Lista de proyectos */}
       <div className="proyectos-grid">
-        {!loading && proyectos.map((proyecto) => (
-          <div key={proyecto.id} className="proyectos-card">
-            <div className="proyectos-card-header">
-              <div className="proyectos-card-title-group">
-                <div className="proyectos-card-icon">
-                  <FolderOpen />
-                </div>
-                <div>
-                  <h3 className="proyectos-card-name">{proyecto.nombre}</h3>
-                  <p className="proyectos-card-category">{proyecto.categoria || 'Sin categoría'}</p>
-                </div>
-              </div>
-              <span className={`proyectos-card-status ${getStatusColor(proyecto.estado)}`}>
-                {proyecto.estado.charAt(0).toUpperCase() + proyecto.estado.slice(1)}
-              </span>
-            </div>
-
-            <p className="proyectos-card-description">{proyecto.descripcion}</p>
-
-            <div className="proyectos-details-grid">
-              <div>
-                <p className="proyectos-detail-label">Responsable</p>
-                <p className="proyectos-detail-value">
-                  <User className="proyectos-detail-icon" />
-                  {proyecto.responsable}
-                </p>
-              </div>
-              <div>
-                <p className="proyectos-detail-label">Presupuesto</p>
-                <p className="proyectos-detail-value">
-                  {proyecto.presupuesto ? `${proyecto.presupuesto.toLocaleString()}` : 'No especificado'}
-                </p>
-              </div>
-              <div>
-                <p className="proyectos-detail-label">Fecha de Envío</p>
-                <p className="proyectos-detail-value">
-                  <Calendar className="proyectos-detail-icon" />
-                  {formatDate(proyecto.fechaEnvio)}
-                </p>
-              </div>
-              <div>
-                <p className="proyectos-detail-label">ID</p>
-                <p className="proyectos-detail-value">#{proyecto.id}</p>
-              </div>
-            </div>
-
-            <div className="proyectos-card-footer">
-              {proyecto.estado === 'pendiente' ? (
-                <>
-                  <button 
-                    onClick={() => aprobarProyecto(proyecto.id)}
-                    className="proyectos-action-button bg-green-600 hover:bg-green-700 text-white"
-                    disabled={loading || !apiService.isAuthenticated()}
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>Aprobar</span>
-                  </button>
-                  <button 
-                    onClick={() => rechazarProyecto(proyecto.id)}
-                    className="proyectos-action-button bg-red-600 hover:bg-red-700 text-white"
-                    disabled={loading || !apiService.isAuthenticated()}
-                  >
-                    <X className="w-4 h-4" />
-                    <span>Rechazar</span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button className="proyectos-action-button proyectos-view-button">
-                    <Eye className="w-4 h-4" />
-                    <span>Ver</span>
-                  </button>
-                  <button className="proyectos-action-button proyectos-edit-button">
-                    <Edit className="w-4 h-4" />
-                    <span>Editar</span>
-                  </button>
-                  <button className="proyectos-action-button proyectos-delete-button">
-                    <Trash2 className="w-4 h-4" />
-                    <span>Eliminar</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+        {!loading && renderProyectos()}
       </div>
 
-      {/* Mensaje cuando no hay proyectos */}
-      {!loading && proyectos.length === 0 && (
+      {/* Mensaje cuando no hay proyectos - mejorado */}
+      {!loading && !renderError && proyectos.length === 0 && (
         <div className="text-center py-12">
           <FolderOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay proyectos</h3>
-          <p className="text-gray-500">
-            {searchTerm || filterStatus !== 'all' 
-              ? 'No se encontraron proyectos con los filtros aplicados'
-              : error.includes('permisos') 
-                ? 'No tiene permisos para ver los proyectos'
-                : 'Aún no hay proyectos registrados'
+          <p className="text-gray-500 mb-4">
+            {error ? 
+              'Hubo un problema al cargar los proyectos.' :
+              searchTerm || filterStatus !== 'all' ? 
+                'No se encontraron proyectos con los filtros aplicados.' : 
+                'Aún no hay proyectos registrados.'
             }
           </p>
+          {!error && apiService.isAuthenticated() && (
+            <button
+              onClick={() => loadProyectos()}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            >
+              Recargar proyectos
+            </button>
+          )}
         </div>
       )}
 
-      {/* Paginación */}
-      {!loading && totalPages > 1 && (
-        <div className="proyectos-pagination">
-          <div className="proyectos-pagination-info">
-            <span className="text-sm text-gray-700">
-              Mostrando {currentPage * pageSize + 1} a {Math.min((currentPage + 1) * pageSize, totalElements)} de {totalElements} proyectos
-            </span>
-          </div>
-          
-          <div className="proyectos-pagination-controls">
+      {/* Paginación mejorada */}
+      {!loading && !renderError && totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row justify-between items-center bg-white px-6 py-3 border-t border-gray-200 rounded-lg shadow-sm mt-6">
+          <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => changePage(currentPage - 1)}
-              disabled={currentPage === 0 || !apiService.isAuthenticated()}
-              className="proyectos-pagination-button"
+              disabled={currentPage === 0 || !apiService.isAuthenticated() || loading}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Anterior</span>
+              Anterior
             </button>
-
-            <div className="proyectos-pagination-numbers">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i;
-                } else if (currentPage <= 2) {
-                  pageNum = i;
-                } else if (currentPage >= totalPages - 3) {
-                  pageNum = totalPages - 5 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => changePage(pageNum)}
-                    disabled={!apiService.isAuthenticated()}
-                    className={`proyectos-pagination-number ${
-                      currentPage === pageNum ? 'active' : ''
-                    }`}
-                  >
-                    {pageNum + 1}
-                  </button>
-                );
-              })}
-            </div>
-
             <button
               onClick={() => changePage(currentPage + 1)}
-              disabled={currentPage >= totalPages - 1 || !apiService.isAuthenticated()}
-              className="proyectos-pagination-button"
+              disabled={currentPage >= totalPages - 1 || !apiService.isAuthenticated() || loading}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>Siguiente</span>
-              <ChevronRight className="w-4 h-4" />
+              Siguiente
             </button>
+          </div>
+          
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Mostrando{' '}
+                <span className="font-medium">{currentPage * pageSize + 1}</span>
+                {' '}a{' '}
+                <span className="font-medium">
+                  {Math.min((currentPage + 1) * pageSize, totalElements)}
+                </span>
+                {' '}de{' '}
+                <span className="font-medium">{totalElements}</span>
+                {' '}proyectos
+              </p>
+            </div>
+            
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <button
+                  onClick={() => changePage(currentPage - 1)}
+                  disabled={currentPage === 0 || !apiService.isAuthenticated() || loading}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="sr-only">Anterior</span>
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                </button>
+                
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i;
+                  } else if (currentPage <= 2) {
+                    pageNum = i;
+                  } else if (currentPage >= totalPages - 3) {
+                    pageNum = totalPages - 5 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => changePage(pageNum)}
+                      disabled={!apiService.isAuthenticated() || loading}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                        currentPage === pageNum
+                          ? 'z-10 bg-red-50 border-red-500 text-red-600'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum + 1}
+                    </button>
+                  );
+                })}
+                
+                <button
+                  onClick={() => changePage(currentPage + 1)}
+                  disabled={currentPage >= totalPages - 1 || !apiService.isAuthenticated() || loading}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="sr-only">Siguiente</span>
+                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </nav>
+            </div>
           </div>
         </div>
       )}
@@ -713,7 +927,7 @@ const Proyectos: React.FC = () => {
                   className="proyectos-form-input"
                   placeholder="Ingrese el nombre del proyecto"
                   required
-                  disabled={!apiService.isAuthenticated()}
+                  disabled={!apiService.isAuthenticated() || loading}
                 />
               </div>
               
@@ -728,7 +942,7 @@ const Proyectos: React.FC = () => {
                   rows={3}
                   placeholder="Ingrese la descripción del proyecto"
                   required
-                  disabled={!apiService.isAuthenticated()}
+                  disabled={!apiService.isAuthenticated() || loading}
                 ></textarea>
               </div>
               
@@ -742,7 +956,7 @@ const Proyectos: React.FC = () => {
                   onChange={(e) => setNewProyecto({...newProyecto, responsable: e.target.value})}
                   className="proyectos-form-input"
                   placeholder="Nombre del responsable"
-                  disabled={!apiService.isAuthenticated()}
+                  disabled={!apiService.isAuthenticated() || loading}
                 />
               </div>
               
@@ -756,7 +970,7 @@ const Proyectos: React.FC = () => {
                   onChange={(e) => setNewProyecto({...newProyecto, categoria: e.target.value})}
                   className="proyectos-form-input"
                   placeholder="Categoría del proyecto"
-                  disabled={!apiService.isAuthenticated()}
+                  disabled={!apiService.isAuthenticated() || loading}
                 />
               </div>
               
@@ -772,7 +986,7 @@ const Proyectos: React.FC = () => {
                   placeholder="0.00"
                   min="0"
                   step="0.01"
-                  disabled={!apiService.isAuthenticated()}
+                  disabled={!apiService.isAuthenticated() || loading}
                 />
               </div>
               
@@ -795,6 +1009,286 @@ const Proyectos: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Modal para ver proyecto */}
+      {showViewModal && selectedProyecto && (
+        <div className="proyectos-modal-overlay">
+          <div className="proyectos-modal max-w-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="proyectos-modal-title">Detalles del Proyecto</h2>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre del Proyecto
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {selectedProyecto.nombre || 'No especificado'}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedProyecto.estado)}`}>
+                    {formatEstadoText(selectedProyecto.estado)}
+                  </span>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Responsable
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {selectedProyecto.responsable || 'No asignado'}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Categoría
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {selectedProyecto.categoria || 'General'}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Presupuesto
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {selectedProyecto.presupuesto ? `${selectedProyecto.presupuesto.toLocaleString()}` : 'No especificado'}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha de Envío
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {formatDate(selectedProyecto.fechaEnvio)}
+                  </p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descripción
+                </label>
+                <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded min-h-[100px]">
+                  {selectedProyecto.descripcion || 'Sin descripción disponible'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para editar proyecto */}
+      {showEditModal && selectedProyecto && (
+        <div className="proyectos-modal-overlay">
+          <div className="proyectos-modal">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="proyectos-modal-title">Editar Proyecto</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              
+              if (!newProyecto.nombre.trim() || !newProyecto.descripcion.trim()) {
+                alert('Nombre y descripción son requeridos');
+                return;
+              }
+              
+              try {
+                if (!verificarToken()) return;
+                
+                setLoading(true);
+                const proyectoData = {
+                  nombre: newProyecto.nombre.trim(),
+                  descripcion: newProyecto.descripcion.trim(),
+                  responsable: newProyecto.responsable.trim(),
+                  presupuesto: newProyecto.presupuesto ? parseFloat(newProyecto.presupuesto) : undefined,
+                  categoria: newProyecto.categoria.trim() || undefined
+                };
+                
+                console.log('✏️ Actualizando proyecto:', selectedProyecto.id, proyectoData);
+                
+                const response = await apiService.updateProyecto(selectedProyecto.id, proyectoData);
+                console.log('📡 Respuesta de actualización:', response);
+                
+                if (response.success) {
+                  console.log('🎉 Proyecto actualizado exitosamente');
+                  setShowEditModal(false);
+                  setSelectedProyecto(null);
+                  setNewProyecto({
+                    nombre: '',
+                    descripcion: '',
+                    responsable: '',
+                    presupuesto: '',
+                    categoria: ''
+                  });
+                  await loadProyectos();
+                  alert('Proyecto actualizado exitosamente');
+                } else {
+                  console.error('❌ Error al actualizar:', response.error);
+                  if (response.status === 401) {
+                    setError('Su sesión ha expirado. Recargue la página e inicie sesión nuevamente.');
+                    apiService.clearToken();
+                  } else {
+                    alert(response.error || 'Error al actualizar proyecto');
+                  }
+                }
+              } catch (err) {
+                console.error('💥 Error de conexión al actualizar proyecto:', err);
+                alert('Error de conexión al actualizar proyecto');
+              } finally {
+                setLoading(false);
+              }
+            }} className="proyectos-modal-form">
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Nombre del Proyecto *
+                </label>
+                <input
+                  type="text"
+                  value={newProyecto.nombre}
+                  onChange={(e) => setNewProyecto({...newProyecto, nombre: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="Ingrese el nombre del proyecto"
+                  required
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Descripción *
+                </label>
+                <textarea
+                  value={newProyecto.descripcion}
+                  onChange={(e) => setNewProyecto({...newProyecto, descripcion: e.target.value})}
+                  className="proyectos-form-textarea"
+                  rows={3}
+                  placeholder="Ingrese la descripción del proyecto"
+                  required
+                  disabled={!apiService.isAuthenticated() || loading}
+                ></textarea>
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Responsable
+                </label>
+                <input
+                  type="text"
+                  value={newProyecto.responsable}
+                  onChange={(e) => setNewProyecto({...newProyecto, responsable: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="Nombre del responsable"
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Categoría
+                </label>
+                <input
+                  type="text"
+                  value={newProyecto.categoria}
+                  onChange={(e) => setNewProyecto({...newProyecto, categoria: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="Categoría del proyecto"
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Presupuesto
+                </label>
+                <input
+                  type="number"
+                  value={newProyecto.presupuesto}
+                  onChange={(e) => setNewProyecto({...newProyecto, presupuesto: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-modal-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedProyecto(null);
+                    setNewProyecto({
+                      nombre: '',
+                      descripcion: '',
+                      responsable: '',
+                      presupuesto: '',
+                      categoria: ''
+                    });
+                  }}
+                  className="proyectos-cancel-button"
+                  disabled={loading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="proyectos-submit-button"
+                  disabled={loading || !apiService.isAuthenticated()}
+                >
+                  {loading ? 'Actualizando...' : 'Actualizar Proyecto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Debug info en desarrollo */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-2 rounded text-xs max-w-xs">
+          <p>Debug Info:</p>
+          <p>Auth: {apiService.isAuthenticated() ? '✅' : '❌'}</p>
+          <p>Token: {apiService.getCurrentToken() ? '✅' : '❌'}</p>
+          <p>Expired: {apiService.isTokenExpired() ? '❌' : '✅'}</p>
+          <p>Proyectos: {proyectos.length}</p>
+          <p>Render Error: {renderError ? '❌' : '✅'}</p>
+          {renderError && <p className="text-red-300 text-xs">Error: {renderError}</p>}
         </div>
       )}
     </div>

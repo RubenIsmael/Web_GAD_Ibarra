@@ -1,3 +1,5 @@
+// components/login/interfaces.ts
+
 export interface LoginRequest {
   username: string;
   password: string;

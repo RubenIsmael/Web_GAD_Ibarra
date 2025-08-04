@@ -4,13 +4,12 @@ import { LoginPageProps, LoginRequest, ServerStatus } from './interfaces';
 import { ApiService } from './ApiService'; 
 import './login.scss';
 
-// *** CREAR INSTANCIA DEL SERVICIO ***
+// *** INSTANCIA GLOBAL DEL SERVICIO ***
 const apiService = new ApiService();
 
 export class LoginPageController {
-  // *** USAR EL SERVICIO UNIFICADO EN LUGAR DE CREAR UNO NUEVO ***
   constructor() {
-
+    // No crear nueva instancia, usar la global
   }
 
   public async checkServerHealth() {
@@ -18,14 +17,40 @@ export class LoginPageController {
   }
 
   public async performLogin(credentials: LoginRequest) {
-    // *** CAPTURA Y PERSISTE EL TOKEN AUTOMÁTICAMENTE ***
     console.log('🔐 Iniciando login con captura y persistencia automática de token...');
     const result = await apiService.login(credentials);
     
-    if (result.success && result.token) {
-      console.log('✅ Token capturado y persistido automáticamente durante el login');
-      console.log('🔑 Token preview:', result.token.substring(0, 50) + '...');
-      console.log('🗃️ Token guardado en memoria y sessionStorage para persistencia');
+    if (result.success) {
+      // Verificar que el token se capturó correctamente
+      const capturedToken = apiService.getCurrentToken();
+      
+      if (capturedToken) {
+        console.log('✅ Token JWT capturado y persistido automáticamente durante el login');
+        console.log('🔑 Token preview:', capturedToken.substring(0, 50) + '...');
+        console.log('🗃️ Token guardado en memoria y storage para persistencia');
+        
+        // Validar que es un JWT válido
+        try {
+          const parts = capturedToken.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            console.log('✅ JWT válido confirmado');
+            console.log('📋 Información del token:', {
+              exp: new Date(payload.exp * 1000).toLocaleString(),
+              iat: new Date(payload.iat * 1000).toLocaleString(),
+              sub: payload.sub
+            });
+          }
+        } catch (jwtError) {
+          console.warn('⚠️ Token no parece ser JWT estándar, pero se mantendrá:', jwtError);
+        }
+        
+      } else if (result.token) {
+        console.log('⚠️ Token en respuesta pero no capturado automáticamente, forzando...');
+        apiService.setToken(result.token);
+      } else {
+        console.log('⚠️ Login exitoso pero sin token explícito - posible autenticación por sesión');
+      }
     }
     
     return result;
@@ -60,15 +85,30 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   // Instancia del controlador
   const [controller] = useState(() => new LoginPageController());
 
-  // *** VERIFICAR SI YA HAY UNA SESIÓN VÁLIDA AL CARGAR ***
+  // *** VERIFICAR SESIÓN EXISTENTE AL CARGAR ***
   useEffect(() => {
-    console.log('🔍 Verificando sesión existente...');
-    if (apiService.isAuthenticated()) {
-      console.log('✅ Sesión válida encontrada, usuario ya autenticado');
-      onLogin(true, apiService.getCurrentToken() || undefined);
-      return;
-    }
-    console.log('❌ No hay sesión válida, mostrando login');
+    console.log('🔍 Verificando sesión existente al cargar componente...');
+    
+    const checkExistingAuth = async () => {
+      // Esperar un poco para sincronización
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      console.log('🔑 Estado actual del token:', {
+        isAuthenticated: apiService.isAuthenticated(),
+        currentToken: apiService.getCurrentToken()?.substring(0, 50) + '...',
+        isExpired: apiService.isTokenExpired()
+      });
+      
+      if (apiService.isAuthenticated() && !apiService.isTokenExpired()) {
+        console.log('✅ Sesión válida encontrada, usuario ya autenticado');
+        onLogin(true, apiService.getCurrentToken() || undefined);
+        return;
+      }
+      
+      console.log('❌ No hay sesión válida, mostrando login');
+    };
+    
+    checkExistingAuth();
   }, [onLogin]);
 
   // Efecto para verificar conexión con el servidor
@@ -83,12 +123,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           setError('');
         } else {
           setServerStatus('disconnected');
-          // No mostrar errores de conexión automáticamente
         }
       } catch (err) {
         console.error('Error al verificar conexión del servidor:', err);
         setServerStatus('disconnected');
-        // No mostrar errores de conexión automáticamente
       }
     };
 
@@ -149,7 +187,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     }
   };
 
-  // *** FUNCIÓN PRINCIPAL DE LOGIN CON PERSISTENCIA AUTOMÁTICA ***
+  // *** FUNCIÓN PRINCIPAL DE LOGIN MEJORADA PARA JWT ***
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     setIsLoading(true);
@@ -161,7 +199,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         password: password.trim()
       };
 
-      // Validaciones del lado del cliente usando el controlador
+      // Validaciones del lado del cliente
       const validationError = controller.validateCredentials(credentials.username, credentials.password);
       if (validationError) {
         setError(validationError);
@@ -177,36 +215,71 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         return;
       }
 
-      // *** EJECUTA EL LOGIN CON CAPTURA Y PERSISTENCIA AUTOMÁTICA DE TOKEN ***
-      console.log('🚀 Ejecutando login con captura y persistencia automática de token...');
+      // *** EJECUTAR LOGIN CON CAPTURA Y PERSISTENCIA AUTOMÁTICA DE JWT ***
+      console.log('🚀 Ejecutando login con captura automática de JWT...');
       const response = await controller.performLogin(credentials);
       
+      console.log('📋 Respuesta del login:', response);
+      
       if (response.success) {
-        console.log('🎉 Login exitoso - Token capturado y persistido automáticamente');
-        console.log('🔍 Estado del token después del login:', {
-          tokenPresent: apiService.isAuthenticated(),
-          tokenPreview: apiService.getCurrentToken()?.substring(0, 50) + '...',
-          tokenPersisted: 'En memoria y sessionStorage'
+        console.log('🎉 Login exitoso - Verificando captura de JWT...');
+        
+        // *** VERIFICACIONES POST-LOGIN PARA JWT ***
+        const jwtToken = apiService.getCurrentToken();
+        const isAuthenticatedAfterLogin = apiService.isAuthenticated();
+        const isTokenExpired = apiService.isTokenExpired();
+        
+        console.log('🔍 Estado después del login:', {
+          jwtPresent: !!jwtToken,
+          jwtPreview: jwtToken?.substring(0, 50) + '...',
+          isAuthenticated: isAuthenticatedAfterLogin,
+          isExpired: isTokenExpired,
+          responseHadToken: !!response.token
         });
         
-        // *** VERIFICAR QUE EL TOKEN SE PERSISTIÓ CORRECTAMENTE ***
-        if (!apiService.isAuthenticated()) {
-          console.error('❌ Error: Token no se persistió correctamente');
-          setError('Error al persistir la sesión. Intente nuevamente.');
-          onLogin(false);
-          return;
+        // *** VALIDAR QUE EL JWT SE PERSISTIÓ CORRECTAMENTE ***
+        if (!isAuthenticatedAfterLogin || !jwtToken || isTokenExpired) {
+          console.error('❌ Error: JWT no se persistió correctamente después del login');
+          
+          // Intentar recuperar token de la respuesta como último recurso
+          if (response.token) {
+            console.log('🔄 Intentando usar token de la respuesta...');
+            apiService.setToken(response.token);
+            
+            if (apiService.isAuthenticated()) {
+              console.log('✅ Token de respuesta funcionó');
+            } else {
+              setError('Error al persistir la sesión. Token inválido recibido del servidor.');
+              onLogin(false);
+              return;
+            }
+          } else {
+            setError('Error al persistir la sesión. No se recibió token JWT válido del servidor.');
+            onLogin(false);
+            return;
+          }
         }
         
-        console.log('✅ Token persistido correctamente, redirigiendo...');
-        onLogin(true, response.token);
+        console.log('✅ JWT persistido correctamente, autenticación exitosa');
+        
+        // *** NOTIFICAR ÉXITO CON EL JWT ACTUAL ***
+        const finalToken = apiService.getCurrentToken();
+        onLogin(true, finalToken || undefined);
         
         // Limpiar formulario tras login exitoso
         setUsername('');
         setPassword('');
         
+        // Log final de confirmación
+        console.log('🎉 Login completado exitosamente con JWT:', {
+          tokenLength: finalToken?.length,
+          isValid: !apiService.isTokenExpired(),
+          preview: finalToken?.substring(0, 30) + '...'
+        });
+        
       } else {
         console.error('❌ Login falló:', response.message);
-        setError(response.message || 'Credenciales incorrectas');
+        setError(response.message || 'Credenciales incorrectas. Verifique su usuario y contraseña.');
         onLogin(false);
       }
     } catch (err) {
@@ -219,10 +292,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         } else if (err.message.includes('timeout') || err.message.includes('AbortError')) {
           setError('La conexión tardó demasiado tiempo. Intente nuevamente.');
         } else {
-          setError('Error de autenticación');
+          setError('Error de autenticación: ' + err.message);
         }
       } else {
-        setError('Error de autenticación');
+        setError('Error de autenticación. Intente nuevamente.');
       }
       
       onLogin(false);
@@ -290,13 +363,23 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
         </div>
 
-        {/* Mensaje de error (solo cuando es necesario) */}
+        {/* Mensaje de error mejorado */}
         {error && (
           <div className="error-message">
             <div className="error-content">
               <div className="error-icon">⚠️</div>
               <div className="error-text">{error}</div>
             </div>
+            {/* Debug info en desarrollo */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="error-debug">
+                <small>
+                  Debug: Token presente: {apiService.isAuthenticated() ? 'SÍ' : 'NO'} | 
+                  Expirado: {apiService.isTokenExpired() ? 'SÍ' : 'NO'} |
+                  Tipo: {apiService.getCurrentToken()?.includes('.') ? 'JWT' : 'Simple'}
+                </small>
+              </div>
+            )}
           </div>
         )}
 
@@ -351,13 +434,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || serverStatus === 'disconnected'}
             className="submit-button"
           >
             {isLoading ? (
               <>
                 <div className="loading-spinner"></div>
-                <span>Ingresando...</span>
+                <span>Autenticando...</span>
               </>
             ) : (
               <>
@@ -368,12 +451,28 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </button>
         </form>
 
+        {/* Información de debug en desarrollo */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="debug-info">
+            <details>
+              <summary>Debug Info</summary>
+              <div className="debug-content">
+                <p>Servidor: {serverStatus}</p>
+                <p>Token presente: {apiService.isAuthenticated() ? 'Sí' : 'No'}</p>
+                <p>Token expirado: {apiService.isTokenExpired() ? 'Sí' : 'No'}</p>
+                <p>Tipo token: {apiService.getCurrentToken()?.includes('.') ? 'JWT' : 'Simple'}</p>
+                <p>Token preview: {apiService.getCurrentToken()?.substring(0, 30) + '...' || 'N/A'}</p>
+              </div>
+            </details>
+          </div>
+        )}
+
         <div className="footer-section">
           <p className="copyright">
             © 2025 GAD Municipal de Ibarra
           </p>
           <p className="version">
-            Versión 1.0.3 - 🔐 Token persistente
+            Versión 1.0.5 - 🔐 JWT captura automática mejorada
           </p>
         </div>
       </div>

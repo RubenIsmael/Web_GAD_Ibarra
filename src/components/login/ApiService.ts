@@ -38,29 +38,86 @@ export class ApiService {
   private readonly API_BASE_URL = 'http://34.10.172.54:8080';
   private authToken: string | null = null;
 
-  // *** MÉTODOS DE GESTIÓN DE TOKEN ***
+  // *** MÉTODOS DE GESTIÓN DE TOKEN MEJORADOS ***
   
-  // Función para obtener token desde memoria
   private getAuthToken(): string | null {
-    return this.authToken;
+    // Prioridad: memoria > sessionStorage > localStorage
+    if (this.authToken) {
+      return this.authToken;
+    }
+    
+    // Intentar recuperar de sessionStorage
+    try {
+      const sessionToken = sessionStorage.getItem('auth_token');
+      if (sessionToken) {
+        this.authToken = sessionToken;
+        console.log('🔄 Token recuperado desde sessionStorage');
+        return sessionToken;
+      }
+    } catch (error) {
+      console.warn('⚠️ Error accediendo sessionStorage:', error);
+    }
+    
+    // Intentar recuperar de localStorage como respaldo
+    try {
+      const localToken = localStorage.getItem('auth_token');
+      if (localToken) {
+        this.authToken = localToken;
+        console.log('🔄 Token recuperado desde localStorage');
+        return localToken;
+      }
+    } catch (error) {
+      console.warn('⚠️ Error accediendo localStorage:', error);
+    }
+    
+    return null;
   }
 
-  // Función para guardar el token en memoria
   private setAuthToken(token: string): void {
     this.authToken = token;
     console.log('🔐 Token guardado exitosamente en memoria');
     console.log('🔑 Token preview:', token.substring(0, 50) + '...');
+    
+    // Guardar en sessionStorage (prioridad alta)
+    try {
+      sessionStorage.setItem('auth_token', token);
+      console.log('💾 Token guardado en sessionStorage');
+    } catch (error) {
+      console.warn('⚠️ Error guardando en sessionStorage:', error);
+    }
+    
+    // Guardar en localStorage como respaldo
+    try {
+      localStorage.setItem('auth_token', token);
+      console.log('💾 Token guardado en localStorage');
+    } catch (error) {
+      console.warn('⚠️ Error guardando en localStorage:', error);
+    }
   }
 
-  // Función para limpiar el token
   private clearAuthToken(): void {
     this.authToken = null;
     console.log('🗑️ Token eliminado de memoria');
+    
+    // Limpiar de sessionStorage
+    try {
+      sessionStorage.removeItem('auth_token');
+      console.log('🗑️ Token eliminado de sessionStorage');
+    } catch (error) {
+      console.warn('⚠️ Error limpiando sessionStorage:', error);
+    }
+    
+    // Limpiar de localStorage
+    try {
+      localStorage.removeItem('auth_token');
+      console.log('🗑️ Token eliminado de localStorage');
+    } catch (error) {
+      console.warn('⚠️ Error limpiando localStorage:', error);
+    }
   }
 
-  // *** MÉTODOS PÚBLICOS PARA GESTIÓN DE TOKEN (AGREGADOS) ***
+  // *** MÉTODOS PÚBLICOS PARA GESTIÓN DE TOKEN ***
   
-  // Verificar si hay token válido y no expirado
   public isAuthenticated(): boolean {
     const token = this.getAuthToken();
     if (!token) {
@@ -78,27 +135,23 @@ export class ApiService {
     return true;
   }
 
-  // Verificar si hay token válido (método original mantenido para compatibilidad)
   public hasValidToken(): boolean {
     return this.isAuthenticated();
   }
 
-  // Obtener el token actual (para debugging)
   public getCurrentToken(): string | null {
     return this.getAuthToken();
   }
 
-  // Establecer token manualmente (si es necesario)
   public setToken(token: string): void {
     this.setAuthToken(token);
   }
 
-  // Limpiar token manualmente
   public clearToken(): void {
     this.clearAuthToken();
   }
 
-  // *** MÉTODO PARA VERIFICAR SI EL TOKEN ESTÁ EXPIRADO ***
+  // *** VERIFICACIÓN DE EXPIRACIÓN DE TOKEN ***
   public isTokenExpired(): boolean {
     const token = this.getAuthToken();
     if (!token) return true;
@@ -199,178 +252,218 @@ export class ApiService {
         };
       }
 
-      const endpoints = [
-        '/api/auth/login',
-        '/auth/login', 
-        '/login',
-        '/api/login',
-        '/api/v1/auth/login'
-      ];
+      // *** ENDPOINT ESPECÍFICO BASADO EN LA DOCUMENTACIÓN SWAGGER ***
+      const endpoint = '/auth/login';
       
-      let lastError = '';
-      
-      for (const endpoint of endpoints) {
+      try {
+        console.log(`🎯 Usando endpoint: ${this.API_BASE_URL}${endpoint}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const requestBody = JSON.stringify({
+          username: credentials.username.trim(),
+          password: credentials.password.trim()
+        });
+        
+        console.log('📦 Request body:', requestBody);
+        
+        const response = await fetch(`${this.API_BASE_URL}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache',
+          },
+          body: requestBody,
+          signal: controller.signal,
+          mode: 'cors', 
+        });
+
+        clearTimeout(timeoutId);
+        console.log(`📡 ${endpoint} respondió con status: ${response.status}`);
+        console.log(`📋 Response headers:`, Object.fromEntries(response.headers.entries()));
+
+        let data: Record<string, unknown> = {};
+        const contentType = response.headers.get('content-type') || '';
+        
         try {
-          console.log(`🎯 Probando endpoint: ${this.API_BASE_URL}${endpoint}`);
+          const responseText = await response.text();
+          console.log(`📄 Response text (${responseText.length} chars):`, responseText.substring(0, 500));
           
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000);
-          
-          const requestBody = JSON.stringify({
-            username: credentials.username.trim(),
-            password: credentials.password.trim()
-          });
-          
-          console.log('📦 Request body:', requestBody);
-          
-          const response = await fetch(`${this.API_BASE_URL}${endpoint}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Cache-Control': 'no-cache',
-            },
-            body: requestBody,
-            signal: controller.signal,
-            mode: 'cors', 
-          });
-
-          clearTimeout(timeoutId);
-          console.log(`📡 ${endpoint} respondió con status: ${response.status}`);
-          console.log(`📋 Response headers:`, Object.fromEntries(response.headers.entries()));
-
-          if (response.status === 404 || response.status === 405) {
-            console.log(`⏭️ ${endpoint} no disponible, probando siguiente...`);
-            continue;
-          }
-
-          let data: Record<string, unknown> = {};
-          const contentType = response.headers.get('content-type') || '';
-          
-          try {
-            const responseText = await response.text();
-            console.log(`📄 Response text (${responseText.length} chars):`, responseText.substring(0, 500));
-            
-            if (responseText.trim()) {
-              if (contentType.includes('application/json') || 
-                  responseText.trim().startsWith('{') || 
-                  responseText.trim().startsWith('[')) {
-                data = JSON.parse(responseText);
-              } else {
-                data = { message: responseText };
-              }
+          if (responseText.trim()) {
+            if (contentType.includes('application/json') || 
+                responseText.trim().startsWith('{') || 
+                responseText.trim().startsWith('[')) {
+              data = JSON.parse(responseText);
             } else {
-              data = { message: 'Respuesta vacía del servidor' };
+              data = { message: responseText };
             }
-          } catch (parseError) {
-            console.error('❌ Error parseando respuesta:', parseError);
-            data = { message: 'Error al procesar respuesta del servidor' };
+          } else {
+            data = { message: 'Respuesta vacía del servidor' };
           }
+        } catch (parseError) {
+          console.error('❌ Error parseando respuesta:', parseError);
+          data = { message: 'Error al procesar respuesta del servidor' };
+        }
 
-          console.log('📊 Datos procesados:', data);
+        console.log('📊 Datos procesados:', data);
+        
+        if (response.ok && (response.status >= 200 && response.status < 300)) {
+          console.log('✅ Login exitoso!');
           
-          if (response.ok && (response.status >= 200 && response.status < 300)) {
-            console.log('✅ Login exitoso!');
+          // *** BÚSQUEDA MEJORADA Y ESPECÍFICA DEL TOKEN JWT ***
+          let token: string | undefined;
+          
+          // 🎯 PRIORIDAD 1: Buscar específicamente 'jwt' (según swagger)
+          if (data.jwt && typeof data.jwt === 'string') {
+            token = data.jwt as string;
+            console.log('🔍 ¡TOKEN JWT ENCONTRADO en campo "jwt"!');
+          }
+          
+          // 🎯 PRIORIDAD 2: Buscar en campos comunes de respuesta
+          if (!token) {
+            const tokenFields = [
+              'token', 'accessToken', 'access_token', 'authToken', 
+              'bearerToken', 'sessionToken', 'apiToken', 'authenticationToken'
+            ];
             
-            // *** CAPTURA EXHAUSTIVA DEL TOKEN ***
-            const token = (data.token || 
-                         data.accessToken || 
-                         data.access_token || 
-                         data.authToken ||
-                         data.jwt ||
-                         data.bearerToken ||
-                         data.sessionToken ||
-                         response.headers.get('Authorization') ||
-                         response.headers.get('X-Auth-Token') ||
-                         response.headers.get('Access-Token')) as string | undefined;
+            for (const field of tokenFields) {
+              if (data[field] && typeof data[field] === 'string') {
+                token = data[field] as string;
+                console.log(`🔍 Token encontrado en campo '${field}'`);
+                break;
+              }
+            }
+          }
+          
+          // 🎯 PRIORIDAD 3: Buscar en headers
+          if (!token) {
+            const headerFields = [
+              'Authorization', 'X-Auth-Token', 'Access-Token', 
+              'X-Access-Token', 'Bearer', 'X-JWT-Token'
+            ];
             
-            console.log('🔍 Buscando token en respuesta...');
-            console.log('📋 Campos disponibles:', Object.keys(data));
-            
-            // *** GUARDAR EL TOKEN AUTOMÁTICAMENTE ***
-            if (token) {
-              this.setAuthToken(token);
-              console.log('🎉 ¡TOKEN CAPTURADO Y GUARDADO AUTOMÁTICAMENTE!');
-              console.log('🔑 Token completo:', token);
-            } else {
-              console.warn('⚠️ NO SE ENCONTRÓ TOKEN EN LA RESPUESTA');
-              console.log('🔍 Respuesta completa para debug:', data);
-              console.log('🔍 Headers completos:', Object.fromEntries(response.headers.entries()));
+            for (const headerField of headerFields) {
+              const headerValue = response.headers.get(headerField);
+              if (headerValue) {
+                token = headerValue.replace(/^Bearer\s+/i, '');
+                console.log(`🔍 Token encontrado en header '${headerField}'`);
+                break;
+              }
+            }
+          }
+          
+          // 🎯 PRIORIDAD 4: Búsqueda recursiva en objetos anidados
+          if (!token && typeof data === 'object') {
+            const findTokenRecursive = (obj: Record<string, unknown>, depth = 0): string | undefined => {
+              if (depth > 3) return undefined; // Limitar profundidad
               
-              // Intentar extraer token de cualquier campo que contenga "token"
-              for (const [key, value] of Object.entries(data)) {
-                if (typeof value === 'string' && key.toLowerCase().includes('token')) {
-                  console.log(`🔍 Posible token encontrado en campo '${key}':`, value.substring(0, 50) + '...');
-                  this.setAuthToken(value);
-                  break;
+              for (const [key, value] of Object.entries(obj)) {
+                if (typeof value === 'string' && (
+                  key.toLowerCase().includes('token') || 
+                  key.toLowerCase().includes('jwt') ||
+                  key.toLowerCase() === 'jwt'
+                )) {
+                  return value;
+                }
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                  const nestedToken = findTokenRecursive(value as Record<string, unknown>, depth + 1);
+                  if (nestedToken) return nestedToken;
                 }
               }
+              return undefined;
+            };
+            
+            token = findTokenRecursive(data);
+            if (token) {
+              console.log('🔍 Token encontrado en búsqueda recursiva');
+            }
+          }
+          
+          // *** GUARDAR EL TOKEN AUTOMÁTICAMENTE SI SE ENCUENTRA ***
+          if (token && token.length > 10) { // Validación básica de longitud
+            this.setAuthToken(token);
+            console.log('🎉 ¡TOKEN CAPTURADO Y GUARDADO AUTOMÁTICAMENTE!');
+            console.log('🔑 Token completo:', token);
+            
+            // *** VALIDACIÓN ADICIONAL: Verificar que es un JWT válido ***
+            try {
+              const parts = token.split('.');
+              if (parts.length === 3) {
+                const payload = JSON.parse(atob(parts[1]));
+                console.log('✅ Token JWT válido detectado');
+                console.log('📋 Payload del token:', payload);
+              } else {
+                console.warn('⚠️ Token no parece ser un JWT válido (no tiene 3 partes)');
+              }
+            } catch (jwtError) {
+              console.warn('⚠️ Error validando estructura JWT:', jwtError);
+              // Aún así mantener el token por si es válido en el servidor
             }
             
-            const userData = (data.user || data.userData) as Record<string, unknown> | undefined;
-            const user: User = userData ? {
-              id: (userData.id as string) || Date.now().toString(),
-              username: (userData.username as string) || credentials.username,
-              email: (userData.email as string) || `${credentials.username}@ibarra.gob.ec`,
-              role: (userData.role as string) || 'user'
-            } : {
-              id: (data.id || data.userId || Date.now().toString()) as string,
-              username: credentials.username,
-              email: (data.email as string) || `${credentials.username}@ibarra.gob.ec`,
-              role: (data.role as string) || 'user'
-            };
-            
-            return {
-              success: true,
-              token: this.getAuthToken() || undefined,
-              user: user,
-              message: (data.message as string) || 'Autenticación exitosa',
-            };
           } else {
-            const errorMessage = (data.message || data.error || `Error HTTP ${response.status}`) as string;
-            console.log(`❌ Login falló: ${errorMessage}`);
-            lastError = errorMessage;
+            console.warn('⚠️ NO SE ENCONTRÓ TOKEN VÁLIDO EN LA RESPUESTA');
+            console.log('🔍 Respuesta completa para debug:', data);
+            console.log('🔍 Headers completos:', Object.fromEntries(response.headers.entries()));
             
-            // Si es error de credenciales, no seguir probando
-            if (response.status === 401 || response.status === 403) {
-              return {
-                success: false,
-                message: 'Credenciales incorrectas. Verifique su usuario y contraseña.',
-              };
-            }
-            
-            // Para errores del servidor, seguir con el siguiente endpoint
-            if (response.status >= 500) {
-              console.log(`🔄 Error del servidor ${response.status}, probando siguiente...`);
-              continue;
-            }
-            
-            // Para otros errores, también devolver inmediatamente
+            // *** RESPUESTA EXITOSA PERO SIN TOKEN - CONTINUAR ***
+            console.log('⚠️ Login exitoso pero sin token, continuando...');
+          }
+          
+          // Extraer información del usuario
+          const userData = (data.user || data.userData || data) as Record<string, unknown>;
+          const user: User = {
+            id: (userData.id || userData.userId || Date.now().toString()) as string,
+            username: (userData.username as string) || credentials.username,
+            email: (userData.email as string) || `${credentials.username}@ibarra.gob.ec`,
+            role: (userData.role as string) || 'user'
+          };
+          
+          return {
+            success: true,
+            token: this.getAuthToken() || undefined,
+            user: user,
+            message: (data.message as string) || 'Autenticación exitosa',
+          };
+        } else {
+          const errorMessage = (data.message || data.error || `Error HTTP ${response.status}`) as string;
+          console.log(`❌ Login falló: ${errorMessage}`);
+          
+          // Si es error de credenciales, devolver error específico
+          if (response.status === 401 || response.status === 403) {
             return {
               success: false,
-              message: errorMessage,
+              message: 'Credenciales incorrectas. Verifique su usuario y contraseña.',
             };
           }
           
-        } catch (endpointError) {
-          console.error(`💥 Error con endpoint ${endpoint}:`, endpointError);
-          
-          if (endpointError instanceof DOMException && endpointError.name === 'AbortError') {
-            lastError = 'Timeout de conexión';
-          } else if (endpointError instanceof TypeError) {
-            lastError = 'Error de red o CORS';
-          } else {
-            lastError = endpointError instanceof Error ? endpointError.message : 'Error desconocido';
-          }
-          
-          continue;
+          return {
+            success: false,
+            message: errorMessage,
+          };
+        }
+        
+      } catch (endpointError) {
+        console.error(`💥 Error con endpoint ${endpoint}:`, endpointError);
+        
+        if (endpointError instanceof DOMException && endpointError.name === 'AbortError') {
+          return {
+            success: false,
+            message: 'Timeout de conexión. Intente nuevamente.',
+          };
+        } else if (endpointError instanceof TypeError) {
+          return {
+            success: false,
+            message: 'Error de red o CORS. Verifique la conexión.',
+          };
+        } else {
+          return {
+            success: false,
+            message: endpointError instanceof Error ? endpointError.message : 'Error desconocido',
+          };
         }
       }
-      
-      return {
-        success: false,
-        message: lastError || 'No se encontró un endpoint de login funcional',
-      };
       
     } catch (loginError) {
       console.error('💥 Error general de login:', loginError);
@@ -526,9 +619,7 @@ export class ApiService {
     }
   }
 
-  // *** MÉTODOS ESPECÍFICOS PARA PROYECTOS (AGREGADOS) ***
-
-  // Obtener proyectos con paginación y filtros
+  // *** MÉTODOS ESPECÍFICOS PARA PROYECTOS ***
   public async getProyectos(page: number = 0, size: number = 10, status?: string, search?: string): Promise<ApiResponse<PaginatedResponse<Proyecto>>> {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -542,33 +633,29 @@ export class ApiService {
     });
   }
 
-  // Obtener proyectos pendientes
   public async getProyectosPendientes(page: number = 0, size: number = 10): Promise<ApiResponse<PaginatedResponse<Proyecto>>> {
     const params = new URLSearchParams({
       page: page.toString(),
       size: size.toString(),
     });
 
-    return this.request<PaginatedResponse<Proyecto>>(`/api/proyectos/pendientes?${params}`, {
+    return this.request<PaginatedResponse<Proyecto>>(`/admin/pending?${params}`, {
       method: 'GET'
     });
   }
 
-  // Aprobar proyecto
   public async aprobarProyecto(projectId: string): Promise<ApiResponse<Proyecto>> {
-    return this.request<Proyecto>(`/api/proyectos/${projectId}/aprobar`, {
-      method: 'PUT'
+    return this.request<Proyecto>(`/admin/approve/${projectId}`, {
+      method: 'POST'
     });
   }
 
-  // Rechazar proyecto
   public async rechazarProyecto(projectId: string): Promise<ApiResponse<Proyecto>> {
-    return this.request<Proyecto>(`/api/proyectos/${projectId}/rechazar`, {
-      method: 'PUT'
+    return this.request<Proyecto>(`/admin/reject/${projectId}`, {
+      method: 'POST'
     });
   }
 
-  // Crear nuevo proyecto
   public async createProyecto(projectData: ProyectoBase): Promise<ApiResponse<Proyecto>> {
     return this.request<Proyecto>('/api/proyectos', {
       method: 'POST',
@@ -576,14 +663,12 @@ export class ApiService {
     });
   }
 
-  // Obtener proyecto por ID
   public async getProyecto(projectId: string): Promise<ApiResponse<Proyecto>> {
     return this.request<Proyecto>(`/api/proyectos/${projectId}`, {
       method: 'GET'
     });
   }
 
-  // Actualizar proyecto
   public async updateProyecto(projectId: string, projectData: Partial<ProyectoBase>): Promise<ApiResponse<Proyecto>> {
     return this.request<Proyecto>(`/api/proyectos/${projectId}`, {
       method: 'PUT',
@@ -591,14 +676,12 @@ export class ApiService {
     });
   }
 
-  // Eliminar proyecto
   public async deleteProyecto(projectId: string): Promise<ApiResponse<{ message: string }>> {
     return this.request<{ message: string }>(`/api/proyectos/${projectId}`, {
       method: 'DELETE'
     });
   }
 
-  // Método para logout que limpia el token
   public async logout(): Promise<void> {
     this.clearAuthToken();
     console.log('👋 Sesión cerrada, token eliminado');
