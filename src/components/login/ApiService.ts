@@ -1,38 +1,13 @@
 // components/login/ApiService.ts
-import { LoginRequest, LoginResponse, ApiResponse, User } from './interfaces';
-
-// *** INTERFACES ADICIONALES PARA PROYECTOS ***
-interface ProyectoBase {
-  nombre: string;
-  descripcion: string;
-  responsable: string;
-  presupuesto?: number;
-  categoria?: string;
-}
-
-interface Proyecto extends ProyectoBase {
-  id: string;
-  estado: 'pendiente' | 'aprobado' | 'rechazado' | 'en-progreso' | 'completado';
-  fechaEnvio: string;
-  fechaInicio?: string;
-  fechaFin?: string;
-}
-
-interface PaginatedResponse<T> {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  pageable: {
-    pageNumber: number;
-    pageSize: number;
-  };
-  empty: boolean;
-  sort: {
-    sorted: boolean;
-    empty: boolean;
-    unsorted: boolean;
-  };
-}
+import { 
+  LoginRequest, 
+  LoginResponse, 
+  ApiResponse, 
+  User, 
+  ProyectoBase, 
+  ProyectoAPI, 
+  PaginatedResponse 
+} from './interfaces';
 
 export class ApiService {
   private readonly API_BASE_URL = 'http://34.10.172.54:8080';
@@ -620,7 +595,7 @@ export class ApiService {
   }
 
   // *** MÉTODOS ESPECÍFICOS PARA PROYECTOS ***
-  public async getProyectos(page: number = 0, size: number = 10, status?: string, search?: string): Promise<ApiResponse<PaginatedResponse<Proyecto>>> {
+  public async getProyectos(page: number = 0, size: number = 10, status?: string, search?: string): Promise<ApiResponse<PaginatedResponse<ProyectoAPI>>> {
     const params = new URLSearchParams({
       page: page.toString(),
       size: size.toString(),
@@ -628,49 +603,49 @@ export class ApiService {
       ...(search && { search })
     });
 
-    return this.request<PaginatedResponse<Proyecto>>(`/api/proyectos?${params}`, {
+    return this.request<PaginatedResponse<ProyectoAPI>>(`/api/proyectos?${params}`, {
       method: 'GET'
     });
   }
 
-  public async getProyectosPendientes(page: number = 0, size: number = 10): Promise<ApiResponse<PaginatedResponse<Proyecto>>> {
+  public async getProyectosPendientes(page: number = 0, size: number = 10): Promise<ApiResponse<PaginatedResponse<ProyectoAPI>>> {
     const params = new URLSearchParams({
       page: page.toString(),
       size: size.toString(),
     });
 
-    return this.request<PaginatedResponse<Proyecto>>(`/admin/pending?${params}`, {
+    return this.request<PaginatedResponse<ProyectoAPI>>(`/admin/pending?${params}`, {
       method: 'GET'
     });
   }
 
-  public async aprobarProyecto(projectId: string): Promise<ApiResponse<Proyecto>> {
-    return this.request<Proyecto>(`/admin/approve/${projectId}`, {
+  public async aprobarProyecto(projectId: string): Promise<ApiResponse<ProyectoAPI>> {
+    return this.request<ProyectoAPI>(`/admin/approve/${projectId}`, {
       method: 'POST'
     });
   }
 
-  public async rechazarProyecto(projectId: string): Promise<ApiResponse<Proyecto>> {
-    return this.request<Proyecto>(`/admin/reject/${projectId}`, {
+  public async rechazarProyecto(projectId: string): Promise<ApiResponse<ProyectoAPI>> {
+    return this.request<ProyectoAPI>(`/admin/reject/${projectId}`, {
       method: 'POST'
     });
   }
 
-  public async createProyecto(projectData: ProyectoBase): Promise<ApiResponse<Proyecto>> {
-    return this.request<Proyecto>('/api/proyectos', {
+  public async createProyecto(projectData: ProyectoBase): Promise<ApiResponse<ProyectoAPI>> {
+    return this.request<ProyectoAPI>('/api/proyectos', {
       method: 'POST',
       body: JSON.stringify(projectData)
     });
   }
 
-  public async getProyecto(projectId: string): Promise<ApiResponse<Proyecto>> {
-    return this.request<Proyecto>(`/api/proyectos/${projectId}`, {
+  public async getProyecto(projectId: string): Promise<ApiResponse<ProyectoAPI>> {
+    return this.request<ProyectoAPI>(`/api/proyectos/${projectId}`, {
       method: 'GET'
     });
   }
 
-  public async updateProyecto(projectId: string, projectData: Partial<ProyectoBase>): Promise<ApiResponse<Proyecto>> {
-    return this.request<Proyecto>(`/api/proyectos/${projectId}`, {
+  public async updateProyecto(projectId: string, projectData: Partial<ProyectoBase>): Promise<ApiResponse<ProyectoAPI>> {
+    return this.request<ProyectoAPI>(`/api/proyectos/${projectId}`, {
       method: 'PUT',
       body: JSON.stringify(projectData)
     });
