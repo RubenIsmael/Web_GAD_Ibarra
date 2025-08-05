@@ -18,23 +18,28 @@ interface ProyectoAPI {
   categoria?: string;
   fechaInicio?: string;
   fechaFin?: string;
+  email?: string;
+  cedula?: string;
+  telefono?: string;
+  address?: string;
 }
 
 interface ProyectoStats {
   totalProyectos: number;
   pendientes: number;
   aprobados: number;
-  presupuestoTotal: string;
+  rechazados: number;
 }
 
 const Proyectos: React.FC = () => {
   // Estados para datos
   const [proyectos, setProyectos] = useState<ProyectoAPI[]>([]);
+  const [proyectosFiltrados, setProyectosFiltrados] = useState<ProyectoAPI[]>([]);
   const [stats, setStats] = useState<ProyectoStats>({
     totalProyectos: 0,
     pendientes: 0,
     aprobados: 0,
-    presupuestoTotal: '$0'
+    rechazados: 0
   });
   
   // Estados para filtros y búsqueda
@@ -59,7 +64,11 @@ const Proyectos: React.FC = () => {
     descripcion: '',
     responsable: '',
     presupuesto: '',
-    categoria: ''
+    categoria: '',
+    email: '',
+    cedula: '',
+    telefono: '',
+    address: ''
   });
 
   // Estados para modales
@@ -129,15 +138,52 @@ const Proyectos: React.FC = () => {
             console.warn('⚠️ Proyecto filtrado por datos incompletos:', proyecto);
             return false;
           }
+          
+          // Debug: Verificar estructura de datos
+          console.log('🔍 Estructura del proyecto recibido:', {
+            hasId: !!proyecto.id,
+            hasNombre: !!proyecto.nombre,
+            hasDescripcion: !!proyecto.descripcion,
+            hasEstado: !!proyecto.estado,
+            hasResponsable: !!proyecto.responsable,
+            hasCategoria: !!proyecto.categoria,
+            nombreValue: proyecto.nombre,
+            categoriaValue: proyecto.categoria,
+            responsableValue: proyecto.responsable
+          });
+          
           return true;
         });
         
         console.log('📋 Proyectos después del filtrado:', proyectosLimpios.length);
         
-        setProyectos(proyectosLimpios);
+        // Normalizar datos de proyectos para asegurar compatibilidad
+        const proyectosNormalizados = proyectosLimpios.map(proyecto => ({
+          id: proyecto.id,
+          nombre: proyecto.nombre || proyecto.name || proyecto.titulo || proyecto.title || '',
+          descripcion: proyecto.descripcion || proyecto.description || proyecto.desc || '',
+          estado: proyecto.estado || proyecto.status || 'pendiente',
+          fechaEnvio: proyecto.fechaEnvio || proyecto.fecha_envio || proyecto.fechaEnvio || '',
+          responsable: proyecto.responsable || proyecto.responsible || proyecto.autor || '',
+          presupuesto: proyecto.presupuesto || proyecto.budget || proyecto.presupuesto || 0,
+          categoria: proyecto.categoria || proyecto.category || proyecto.cat || '',
+          fechaInicio: proyecto.fechaInicio || proyecto.fecha_inicio || proyecto.startDate || '',
+          fechaFin: proyecto.fechaFin || proyecto.fecha_fin || proyecto.endDate || '',
+          email: proyecto.email || proyecto.correo || proyecto.email || '',
+          cedula: proyecto.cedula || proyecto.identification || proyecto.cedula || '',
+          telefono: proyecto.phone || proyecto.telefono || proyecto.phone || '',
+          address: proyecto.address || proyecto.direccion || proyecto.address || ''
+        }));
+        
+        console.log('📋 Proyectos normalizados:', proyectosNormalizados);
+        
+        setProyectos(proyectosNormalizados);
         setTotalPages(response.data.totalPages);
         setTotalElements(response.data.totalElements);
         setCurrentPage(response.data.pageable.pageNumber);
+        
+        // Aplicar filtros después de cargar los proyectos
+        setTimeout(() => filtrarProyectos(), 0);
         
         // Limpiar error de renderizado cuando carga exitosa
         setRenderError('');
@@ -186,13 +232,13 @@ const Proyectos: React.FC = () => {
   const calculateStats = (proyectosList: ProyectoAPI[], total: number) => {
     const pendientes = proyectosList.filter(p => p.estado === 'pendiente').length;
     const aprobados = proyectosList.filter(p => p.estado === 'aprobado').length;
-    const presupuestoTotal = proyectosList.reduce((sum, p) => sum + (p.presupuesto || 0), 0);
+    const rechazados = proyectosList.filter(p => p.estado === 'rechazado').length;
     
     setStats({
       totalProyectos: total,
       pendientes,
       aprobados,
-      presupuestoTotal: `$${presupuestoTotal.toLocaleString()}`
+      rechazados
     });
   };
 
@@ -210,6 +256,8 @@ const Proyectos: React.FC = () => {
       if (response.success) {
         console.log('🎉 Proyecto aprobado exitosamente');
         await loadProyectos();
+        // Actualizar estadísticas inmediatamente
+        setTimeout(() => filtrarProyectos(), 100);
         alert('Proyecto aprobado exitosamente');
       } else {
         console.error('❌ Error al aprobar:', response.error);
@@ -246,6 +294,8 @@ const Proyectos: React.FC = () => {
       if (response.success) {
         console.log('✅ Proyecto rechazado exitosamente');
         await loadProyectos();
+        // Actualizar estadísticas inmediatamente
+        setTimeout(() => filtrarProyectos(), 100);
         alert('Proyecto rechazado exitosamente');
       } else {
         console.error('❌ Error al rechazar:', response.error);
@@ -286,7 +336,11 @@ const Proyectos: React.FC = () => {
         descripcion: newProyecto.descripcion.trim(),
         responsable: newProyecto.responsable.trim(),
         presupuesto: newProyecto.presupuesto ? parseFloat(newProyecto.presupuesto) : undefined,
-        categoria: newProyecto.categoria.trim() || undefined
+        categoria: newProyecto.categoria.trim() || undefined,
+        email: newProyecto.email.trim() || undefined,
+        cedula: newProyecto.cedula.trim() || undefined,
+        telefono: newProyecto.telefono.trim() || undefined,
+        address: newProyecto.address.trim() || undefined
       };
       
       console.log('➕ Creando proyecto:', proyectoData);
@@ -302,7 +356,11 @@ const Proyectos: React.FC = () => {
           descripcion: '',
           responsable: '',
           presupuesto: '',
-          categoria: ''
+          categoria: '',
+          email: '',
+          cedula: '',
+          telefono: '',
+          address: ''
         });
         await loadProyectos();
         alert('Proyecto creado exitosamente');
@@ -339,17 +397,50 @@ const Proyectos: React.FC = () => {
   };
 
   // Filtrar por estado
+  // Función para filtrar proyectos
+  const filtrarProyectos = useCallback(() => {
+    let proyectosFiltrados = proyectos;
+
+    // Filtrar por estado
+    if (filterStatus !== 'all') {
+      proyectosFiltrados = proyectosFiltrados.filter(proyecto => 
+        proyecto.estado === filterStatus
+      );
+    }
+
+    // Filtrar por búsqueda
+    if (searchTerm.trim() !== '') {
+      const terminoBusqueda = searchTerm.toLowerCase();
+      proyectosFiltrados = proyectosFiltrados.filter(proyecto => 
+        (proyecto.nombre && proyecto.nombre.toLowerCase().includes(terminoBusqueda)) ||
+        (proyecto.email && proyecto.email.toLowerCase().includes(terminoBusqueda)) ||
+        (proyecto.cedula && proyecto.cedula.toLowerCase().includes(terminoBusqueda)) ||
+        (proyecto.telefono && proyecto.telefono.toLowerCase().includes(terminoBusqueda)) ||
+        (proyecto.address && proyecto.address.toLowerCase().includes(terminoBusqueda)) ||
+        (proyecto.categoria && proyecto.categoria.toLowerCase().includes(terminoBusqueda))
+      );
+    }
+
+    // Filtrar proyectos no registrados (sin nombre válido)
+    proyectosFiltrados = proyectosFiltrados.filter(proyecto => 
+      proyecto.nombre && proyecto.nombre.trim() !== ''
+    );
+
+    setProyectosFiltrados(proyectosFiltrados);
+  }, [proyectos, filterStatus, searchTerm]);
+
   const handleFilterChange = (newFilter: string) => {
     setFilterStatus(newFilter);
     setCurrentPage(0);
-    loadProyectos(0, pageSize);
+    // No recargar desde la API, solo filtrar localmente
+    setTimeout(() => filtrarProyectos(), 0);
   };
 
   // Buscar proyectos
   const handleSearch = useCallback(() => {
     setCurrentPage(0);
-    loadProyectos(0, pageSize);
-  }, [pageSize]);
+    filtrarProyectos();
+  }, [filtrarProyectos]);
 
   // Efecto inicial con debugging mejorado
   useEffect(() => {
@@ -384,13 +475,18 @@ const Proyectos: React.FC = () => {
     if (!apiService.isAuthenticated()) return;
     
     const delayedSearch = setTimeout(() => {
-      if (searchTerm !== '') {
-        handleSearch();
-      }
+      filtrarProyectos();
     }, 500);
 
     return () => clearTimeout(delayedSearch);
-  }, [searchTerm, handleSearch]);
+  }, [searchTerm, filtrarProyectos]);
+
+  // Efecto para aplicar filtros cuando cambien los proyectos
+  useEffect(() => {
+    if (proyectos.length > 0) {
+      filtrarProyectos();
+    }
+  }, [proyectos, filtrarProyectos]);
 
   const getStatusColor = (estado: string | undefined) => {
     if (!estado) return 'bg-gray-100 text-gray-800';
@@ -427,17 +523,46 @@ const Proyectos: React.FC = () => {
   // Función para renderizar proyectos de forma segura
   const renderProyectos = () => {
     try {
-      return proyectos.map((proyecto) => {
+      return proyectosFiltrados.map((proyecto) => {
         // Validación de datos del proyecto
         if (!proyecto || !proyecto.id) {
           console.warn('⚠️ Proyecto con datos incompletos:', proyecto);
           return null;
         }
 
+        // Debug: Mostrar datos del proyecto
+        console.log('🔍 Datos del proyecto:', {
+          id: proyecto.id,
+          nombre: proyecto.nombre,
+          descripcion: proyecto.descripcion,
+          estado: proyecto.estado,
+          responsable: proyecto.responsable,
+          categoria: proyecto.categoria
+        });
+
         // Determinar el estado real del proyecto
         const estadoProyecto = proyecto.estado || 'pendiente';
-        const nombreProyecto = proyecto.nombre && proyecto.nombre.trim() !== '' ? proyecto.nombre : `Proyecto #${proyecto.id}`;
-        const descripcionProyecto = proyecto.descripcion && proyecto.descripcion.trim() !== '' ? proyecto.descripcion : 'Descripción no disponible';
+        
+        // Función para generar un nombre descriptivo cuando no hay nombre
+        const generarNombreDescriptivo = (proyecto: ProyectoAPI): string => {
+          if (proyecto.nombre && proyecto.nombre.trim() !== '') {
+            return proyecto.nombre;
+          }
+          
+          // Intentar generar un nombre basado en otros campos
+          if (proyecto.categoria && proyecto.categoria.trim() !== '') {
+            return `${proyecto.categoria} #${proyecto.id}`;
+          }
+          
+          if (proyecto.responsable && proyecto.responsable.trim() !== '') {
+            return `Proyecto de ${proyecto.responsable} #${proyecto.id}`;
+          }
+          
+          // Fallback al ID con indicación de que falta nombre
+          return `Proyecto #${proyecto.id} (Sin nombre)`;
+        };
+        
+        const nombreProyecto = generarNombreDescriptivo(proyecto);
 
         return (
           <div key={proyecto.id} className="proyectos-card">
@@ -447,7 +572,12 @@ const Proyectos: React.FC = () => {
                   <FolderOpen />
                 </div>
                 <div>
-                  <h3 className="proyectos-card-name">{nombreProyecto}</h3>
+                  <h3 className="proyectos-card-name" title={!proyecto.nombre || proyecto.nombre.trim() === '' ? 'Este proyecto no tiene nombre asignado' : ''}>
+                    {nombreProyecto}
+                    {(!proyecto.nombre || proyecto.nombre.trim() === '') && (
+                      <span className="text-xs text-gray-500 ml-2">(Sin nombre)</span>
+                    )}
+                  </h3>
                   <p className="proyectos-card-category">{proyecto.categoria || 'General'}</p>
                 </div>
               </div>
@@ -456,32 +586,32 @@ const Proyectos: React.FC = () => {
               </span>
             </div>
 
-            <p className="proyectos-card-description">{descripcionProyecto}</p>
-
             <div className="proyectos-details-grid">
               <div>
-                <p className="proyectos-detail-label">Responsable</p>
+                <p className="proyectos-detail-label">Correo Electrónico</p>
                 <p className="proyectos-detail-value">
                   <User className="proyectos-detail-icon" />
-                  {proyecto.responsable || 'No asignado'}
+                  {proyecto.email || 'No especificado'}
                 </p>
               </div>
               <div>
-                <p className="proyectos-detail-label">Presupuesto</p>
+                <p className="proyectos-detail-label">Número de Cédula</p>
                 <p className="proyectos-detail-value">
-                  {proyecto.presupuesto ? `$${proyecto.presupuesto.toLocaleString()}` : 'No especificado'}
+                  {proyecto.cedula || 'No especificado'}
                 </p>
               </div>
               <div>
-                <p className="proyectos-detail-label">Fecha de Envío</p>
+                <p className="proyectos-detail-label">Número de Teléfono</p>
                 <p className="proyectos-detail-value">
                   <Calendar className="proyectos-detail-icon" />
-                  {formatDate(proyecto.fechaEnvio)}
+                  {proyecto.telefono || 'No especificado'}
                 </p>
               </div>
               <div>
-                <p className="proyectos-detail-label">ID</p>
-                <p className="proyectos-detail-value">#{proyecto.id}</p>
+                <p className="proyectos-detail-label">Dirección</p>
+                <p className="proyectos-detail-value">
+                  {proyecto.address || 'No especificado'}
+                </p>
               </div>
             </div>
 
@@ -528,7 +658,11 @@ const Proyectos: React.FC = () => {
                         descripcion: proyecto.descripcion || '',
                         responsable: proyecto.responsable || '',
                         presupuesto: proyecto.presupuesto?.toString() || '',
-                        categoria: proyecto.categoria || ''
+                        categoria: proyecto.categoria || '',
+                        email: proyecto.email || '',
+                        cedula: proyecto.cedula || '',
+                        telefono: proyecto.telefono || '',
+                        address: proyecto.address || ''
                       });
                       setShowEditModal(true);
                     }}
@@ -703,11 +837,11 @@ const Proyectos: React.FC = () => {
         <div className="proyectos-stat-card">
           <div className="proyectos-stat-content">
             <div>
-              <p className="proyectos-stat-text-sm">Presupuesto Total</p>
-              <p className="proyectos-stat-text-lg">{stats.presupuestoTotal}</p>
+              <p className="proyectos-stat-text-sm">Rechazados</p>
+              <p className="proyectos-stat-text-lg">{stats.rechazados}</p>
             </div>
             <div className="proyectos-stat-icon-container bg-red-100">
-              <TrendingUp className="proyectos-stat-icon text-red-600" />
+              <X className="proyectos-stat-icon text-red-600" />
             </div>
           </div>
         </div>
@@ -720,7 +854,7 @@ const Proyectos: React.FC = () => {
             <Search className="proyectos-search-icon" />
             <input
               type="text"
-              placeholder="Buscar proyectos por nombre o responsable..."
+              placeholder="Buscar por nombre, correo, cédula, teléfono o dirección..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="proyectos-search-input"
@@ -793,8 +927,43 @@ const Proyectos: React.FC = () => {
         </div>
       )}
       
+      {/* Indicador de proyectos filtrados */}
+      {!loading && proyectosFiltrados.length > 0 && (
+        <div className="mb-4 text-sm text-gray-600">
+          Mostrando {proyectosFiltrados.length} de {proyectos.length} proyectos
+          {filterStatus !== 'all' && ` (filtrado por: ${formatEstadoText(filterStatus)})`}
+          {searchTerm && ` (búsqueda: "${searchTerm}")`}
+        </div>
+      )}
+
       {/* Lista de proyectos */}
       <div className="proyectos-grid">
+        {!loading && proyectosFiltrados.length === 0 && proyectos.length > 0 && (
+          <div className="col-span-full text-center py-8">
+            <div className="text-gray-500">
+              <FolderOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p className="text-lg font-medium">No se encontraron proyectos</p>
+              <p className="text-sm">
+                {filterStatus !== 'all' 
+                  ? `No hay proyectos con estado "${formatEstadoText(filterStatus)}"`
+                  : searchTerm 
+                    ? `No hay proyectos que coincidan con "${searchTerm}" en nombre, correo, cédula, teléfono o dirección`
+                    : 'No hay proyectos registrados'
+                }
+              </p>
+              <button
+                onClick={() => {
+                  setFilterStatus('all');
+                  setSearchTerm('');
+                  filtrarProyectos();
+                }}
+                className="mt-4 text-blue-600 hover:text-blue-800 underline"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          </div>
+        )}
         {!loading && renderProyectos()}
       </div>
 
@@ -948,20 +1117,6 @@ const Proyectos: React.FC = () => {
               
               <div className="proyectos-form-group">
                 <label className="proyectos-form-label">
-                  Responsable
-                </label>
-                <input
-                  type="text"
-                  value={newProyecto.responsable}
-                  onChange={(e) => setNewProyecto({...newProyecto, responsable: e.target.value})}
-                  className="proyectos-form-input"
-                  placeholder="Nombre del responsable"
-                  disabled={!apiService.isAuthenticated() || loading}
-                />
-              </div>
-              
-              <div className="proyectos-form-group">
-                <label className="proyectos-form-label">
                   Categoría
                 </label>
                 <input
@@ -976,18 +1131,58 @@ const Proyectos: React.FC = () => {
               
               <div className="proyectos-form-group">
                 <label className="proyectos-form-label">
-                  Presupuesto
+                  Correo Electrónico
                 </label>
                 <input
-                  type="number"
-                  value={newProyecto.presupuesto}
-                  onChange={(e) => setNewProyecto({...newProyecto, presupuesto: e.target.value})}
+                  type="email"
+                  value={newProyecto.email}
+                  onChange={(e) => setNewProyecto({...newProyecto, email: e.target.value})}
                   className="proyectos-form-input"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
+                  placeholder="correo@ejemplo.com"
                   disabled={!apiService.isAuthenticated() || loading}
                 />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Número de Cédula
+                </label>
+                <input
+                  type="text"
+                  value={newProyecto.cedula}
+                  onChange={(e) => setNewProyecto({...newProyecto, cedula: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="1234567890"
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Número de Teléfono
+                </label>
+                <input
+                  type="tel"
+                  value={newProyecto.telefono}
+                  onChange={(e) => setNewProyecto({...newProyecto, telefono: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="0987654321"
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Dirección
+                </label>
+                <textarea
+                  value={newProyecto.address}
+                  onChange={(e) => setNewProyecto({...newProyecto, address: e.target.value})}
+                  className="proyectos-form-textarea"
+                  rows={2}
+                  placeholder="Ingrese la dirección completa"
+                  disabled={!apiService.isAuthenticated() || loading}
+                ></textarea>
               </div>
               
               <div className="proyectos-modal-actions">
@@ -1048,15 +1243,6 @@ const Proyectos: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Responsable
-                  </label>
-                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
-                    {selectedProyecto.responsable || 'No asignado'}
-                  </p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Categoría
                   </label>
                   <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
@@ -1066,19 +1252,37 @@ const Proyectos: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Presupuesto
+                    Correo Electrónico
                   </label>
                   <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
-                    {selectedProyecto.presupuesto ? `${selectedProyecto.presupuesto.toLocaleString()}` : 'No especificado'}
+                    {selectedProyecto.email || 'No especificado'}
                   </p>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha de Envío
+                    Número de Cédula
                   </label>
                   <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
-                    {formatDate(selectedProyecto.fechaEnvio)}
+                    {selectedProyecto.cedula || 'No especificado'}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Número de Teléfono
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {selectedProyecto.telefono || 'No especificado'}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dirección
+                  </label>
+                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {selectedProyecto.address || 'No especificado'}
                   </p>
                 </div>
               </div>
@@ -1136,7 +1340,11 @@ const Proyectos: React.FC = () => {
                   descripcion: newProyecto.descripcion.trim(),
                   responsable: newProyecto.responsable.trim(),
                   presupuesto: newProyecto.presupuesto ? parseFloat(newProyecto.presupuesto) : undefined,
-                  categoria: newProyecto.categoria.trim() || undefined
+                  categoria: newProyecto.categoria.trim() || undefined,
+                  email: newProyecto.email.trim() || undefined,
+                  cedula: newProyecto.cedula.trim() || undefined,
+                  telefono: newProyecto.telefono.trim() || undefined,
+                  address: newProyecto.address.trim() || undefined
                 };
                 
                 console.log('✏️ Actualizando proyecto:', selectedProyecto.id, proyectoData);
@@ -1153,7 +1361,11 @@ const Proyectos: React.FC = () => {
                     descripcion: '',
                     responsable: '',
                     presupuesto: '',
-                    categoria: ''
+                    categoria: '',
+                    email: '',
+                    cedula: '',
+                    telefono: '',
+                    address: ''
                   });
                   await loadProyectos();
                   alert('Proyecto actualizado exitosamente');
@@ -1205,20 +1417,6 @@ const Proyectos: React.FC = () => {
               
               <div className="proyectos-form-group">
                 <label className="proyectos-form-label">
-                  Responsable
-                </label>
-                <input
-                  type="text"
-                  value={newProyecto.responsable}
-                  onChange={(e) => setNewProyecto({...newProyecto, responsable: e.target.value})}
-                  className="proyectos-form-input"
-                  placeholder="Nombre del responsable"
-                  disabled={!apiService.isAuthenticated() || loading}
-                />
-              </div>
-              
-              <div className="proyectos-form-group">
-                <label className="proyectos-form-label">
                   Categoría
                 </label>
                 <input
@@ -1233,18 +1431,58 @@ const Proyectos: React.FC = () => {
               
               <div className="proyectos-form-group">
                 <label className="proyectos-form-label">
-                  Presupuesto
+                  Correo Electrónico
                 </label>
                 <input
-                  type="number"
-                  value={newProyecto.presupuesto}
-                  onChange={(e) => setNewProyecto({...newProyecto, presupuesto: e.target.value})}
+                  type="email"
+                  value={newProyecto.email}
+                  onChange={(e) => setNewProyecto({...newProyecto, email: e.target.value})}
                   className="proyectos-form-input"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
+                  placeholder="correo@ejemplo.com"
                   disabled={!apiService.isAuthenticated() || loading}
                 />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Número de Cédula
+                </label>
+                <input
+                  type="text"
+                  value={newProyecto.cedula}
+                  onChange={(e) => setNewProyecto({...newProyecto, cedula: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="1234567890"
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Número de Teléfono
+                </label>
+                <input
+                  type="tel"
+                  value={newProyecto.telefono}
+                  onChange={(e) => setNewProyecto({...newProyecto, telefono: e.target.value})}
+                  className="proyectos-form-input"
+                  placeholder="0987654321"
+                  disabled={!apiService.isAuthenticated() || loading}
+                />
+              </div>
+              
+              <div className="proyectos-form-group">
+                <label className="proyectos-form-label">
+                  Dirección
+                </label>
+                <textarea
+                  value={newProyecto.address}
+                  onChange={(e) => setNewProyecto({...newProyecto, address: e.target.value})}
+                  className="proyectos-form-textarea"
+                  rows={2}
+                  placeholder="Ingrese la dirección completa"
+                  disabled={!apiService.isAuthenticated() || loading}
+                ></textarea>
               </div>
               
               <div className="proyectos-modal-actions">
@@ -1258,7 +1496,11 @@ const Proyectos: React.FC = () => {
                       descripcion: '',
                       responsable: '',
                       presupuesto: '',
-                      categoria: ''
+                      categoria: '',
+                      email: '',
+                      cedula: '',
+                      telefono: '',
+                      address: ''
                     });
                   }}
                   className="proyectos-cancel-button"
