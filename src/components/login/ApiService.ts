@@ -661,4 +661,400 @@ export class ApiService {
     this.clearAuthToken();
     console.log('👋 Sesión cerrada, token eliminado');
   }
+
+  // *** 🆕 NUEVOS MÉTODOS PARA DOCUMENTOS - AGREGADOS SIN ELIMINAR NADA ***
+  
+  /**
+   * Obtiene el certificado de un usuario específico (ADMIN)
+   * @param userId ID del usuario
+   * @returns Documento en formato base64
+   */
+  public async getUserCertificate(userId: string): Promise<ApiResponse<string>> {
+    console.log('📄 Obteniendo certificado para usuario:', userId);
+    
+    try {
+      const url = `${this.API_BASE_URL}/admin/get-user-certificate?userId=${userId}`;
+      console.log(`🌐 Petición GET a: ${url}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'include',
+      });
+      
+      clearTimeout(timeoutId);
+      console.log(`📡 Status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${response.statusText}`,
+          message: 'Error obteniendo certificado',
+          status: response.status
+        };
+      }
+      
+      // Para archivos, convertir a base64
+      const arrayBuffer = await response.arrayBuffer();
+      const base64String = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      
+      return {
+        success: true,
+        data: base64String,
+        message: 'Certificado obtenido exitosamente'
+      };
+      
+    } catch (error) {
+      console.error('💥 Error obteniendo certificado:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error obteniendo certificado',
+        message: 'Error de conexión'
+      };
+    }
+  }
+
+  /**
+   * Obtiene el documento de identidad de un usuario específico (ADMIN)
+   * @param userId ID del usuario
+   * @returns Documento en formato base64
+   */
+  public async getUserIdentityDocument(userId: string): Promise<ApiResponse<string>> {
+    console.log('🆔 Obteniendo documento de identidad para usuario:', userId);
+    
+    try {
+      const url = `${this.API_BASE_URL}/admin/get-user-identity-document?userId=${userId}`;
+      console.log(`🌐 Petición GET a: ${url}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'include',
+      });
+      
+      clearTimeout(timeoutId);
+      console.log(`📡 Status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${response.statusText}`,
+          message: 'Error obteniendo documento de identidad',
+          status: response.status
+        };
+      }
+      
+      // Para archivos, convertir a base64
+      const arrayBuffer = await response.arrayBuffer();
+      const base64String = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      
+      return {
+        success: true,
+        data: base64String,
+        message: 'Documento de identidad obtenido exitosamente'
+      };
+      
+    } catch (error) {
+      console.error('💥 Error obteniendo documento de identidad:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error obteniendo documento de identidad',
+        message: 'Error de conexión'
+      };
+    }
+  }
+
+  /**
+   * Obtiene el certificado del usuario autenticado actual
+   * @returns Documento en formato base64
+   */
+  public async getCurrentUserCertificate(): Promise<ApiResponse<string>> {
+    console.log('📄 Obteniendo certificado del usuario actual');
+    
+    try {
+      const url = `${this.API_BASE_URL}/users/get-certificate`;
+      console.log(`🌐 Petición GET a: ${url}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'include',
+      });
+      
+      clearTimeout(timeoutId);
+      console.log(`📡 Status: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${response.statusText}`,
+          message: 'Error obteniendo certificado del usuario actual',
+          status: response.status
+        };
+      }
+      
+      // Para archivos, convertir a base64
+      const arrayBuffer = await response.arrayBuffer();
+      const base64String = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      
+      return {
+        success: true,
+        data: base64String,
+        message: 'Certificado obtenido exitosamente'
+      };
+      
+    } catch (error) {
+      console.error('💥 Error obteniendo certificado del usuario actual:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error obteniendo certificado',
+        message: 'Error de conexión'
+      };
+    }
+  }
+
+  /**
+   * Carga todos los documentos de un usuario en paralelo
+   * @param userId ID del usuario
+   * @returns Objeto con todos los documentos disponibles
+   */
+  public async getAllUserDocuments(userId: string): Promise<{
+    certificate?: string;
+    identityDocument?: string;
+    signedDocument?: string;
+    errors: string[];
+  }> {
+    console.log('📂 Cargando todos los documentos para usuario:', userId);
+    
+    const documents: {
+      certificate?: string;
+      identityDocument?: string;
+      signedDocument?: string;
+      errors: string[];
+    } = { errors: [] };
+
+    // Cargar documentos en paralelo
+    const promises = [
+      this.getUserCertificate(userId),
+      this.getUserIdentityDocument(userId),
+      this.getCurrentUserCertificate() // Para documento firmado
+    ];
+
+    const [certificateResponse, identityResponse, signedResponse] = await Promise.allSettled(promises);
+
+    // Procesar certificado
+    if (certificateResponse.status === 'fulfilled' && certificateResponse.value.success && certificateResponse.value.data) {
+      documents.certificate = certificateResponse.value.data;
+    } else {
+      const error = certificateResponse.status === 'fulfilled' 
+        ? (certificateResponse.value.error || 'Error desconocido')
+        : 'Error de conexión';
+      documents.errors.push(`Certificado: ${error}`);
+    }
+
+    // Procesar documento de identidad
+    if (identityResponse.status === 'fulfilled' && identityResponse.value.success && identityResponse.value.data) {
+      documents.identityDocument = identityResponse.value.data;
+    } else {
+      const error = identityResponse.status === 'fulfilled' 
+        ? (identityResponse.value.error || 'Error desconocido')
+        : 'Error de conexión';
+      documents.errors.push(`Documento de identidad: ${error}`);
+    }
+
+    // Procesar documento firmado
+    if (signedResponse.status === 'fulfilled' && signedResponse.value.success && signedResponse.value.data) {
+      documents.signedDocument = signedResponse.value.data;
+    } else {
+      const error = signedResponse.status === 'fulfilled' 
+        ? (signedResponse.value.error || 'Error desconocido')
+        : 'Error de conexión';
+      documents.errors.push(`Documento firmado: ${error}`);
+    }
+
+    console.log('📋 Documentos cargados:', {
+      certificate: !!documents.certificate,
+      identityDocument: !!documents.identityDocument,
+      signedDocument: !!documents.signedDocument,
+      errorsCount: documents.errors.length
+    });
+
+    return documents;
+  }
+
+  /**
+   * Envía observaciones junto con el rechazo de un proyecto
+   * @param userId ID del usuario
+   * @param observacion Texto de la observación
+   * @returns Respuesta de la API
+   */
+  public async rechazarProyectoConObservacion(userId: string, observacion: string): Promise<ApiResponse<{ message: string }>> {
+    console.log('❌ Rechazando proyecto con observación:', { userId, observacion: observacion.substring(0, 50) + '...' });
+    
+    return this.request<{ message: string }>(`/admin/reject/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        observacion: observacion.trim(),
+        timestamp: new Date().toISOString()
+      }),
+    });
+  }
+
+  /**
+   * Convierte datos base64 a URL de objeto para visualización
+   * @param base64Data Datos en formato base64
+   * @param mimeType Tipo MIME del archivo
+   * @returns URL del objeto
+   */
+  public createObjectURL(base64Data: string, mimeType: string = 'application/pdf'): string {
+    try {
+      // Decodificar base64 a array de bytes
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType });
+      
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error('Error creando URL del objeto:', error);
+      throw new Error('No se pudo procesar el documento');
+    }
+  }
+
+  /**
+   * Descarga un archivo desde datos base64
+   * @param base64Data Datos en formato base64
+   * @param filename Nombre del archivo
+   * @param mimeType Tipo MIME del archivo
+   */
+  public downloadFile(base64Data: string, filename: string, mimeType: string = 'application/pdf'): void {
+    try {
+      const url = this.createObjectURL(base64Data, mimeType);
+      
+      // Crear enlace temporal para descarga
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Limpiar URL del objeto
+      URL.revokeObjectURL(url);
+      
+      console.log('📥 Archivo descargado:', filename);
+    } catch (error) {
+      console.error('Error descargando archivo:', error);
+      throw new Error('No se pudo descargar el documento');
+    }
+  }
+
+  /**
+   * Valida si los datos base64 son válidos
+   * @param base64Data Datos a validar
+   * @returns true si son válidos
+   */
+  public isValidBase64(base64Data: string): boolean {
+    try {
+      if (!base64Data || typeof base64Data !== 'string') {
+        return false;
+      }
+      
+      // Verificar formato base64 básico
+      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      return base64Regex.test(base64Data) && base64Data.length % 4 === 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Verifica el estado del servidor
+   * @returns Estado de conexión
+   */
+  public async checkServerStatus(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.API_BASE_URL}/health`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.warn('⚠️ Servidor no disponible:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene información del usuario actual
+   * @returns Datos del usuario
+   */
+  public async getCurrentUser(): Promise<ApiResponse<User>> {
+    return this.request<User>('/users/me');
+  }
+
+  /**
+   * Información de debug para desarrollo
+   * @returns Estado actual del servicio
+   */
+  public getDebugInfo(): {
+    isAuthenticated: boolean;
+    hasToken: boolean;
+    tokenPreview: string;
+    baseURL: string;
+    tokenExpired: boolean;
+  } {
+    return {
+      isAuthenticated: this.isAuthenticated(),
+      hasToken: !!this.getAuthToken(),
+      tokenPreview: this.getAuthToken() ? `${this.getAuthToken()!.substring(0, 20)}...` : 'No token',
+      baseURL: this.API_BASE_URL,
+      tokenExpired: this.isTokenExpired()
+    };
+  }
+
+  /**
+   * Log de información útil para debugging
+   */
+  public logDebugInfo(): void {
+    console.group('🔍 ApiService Debug Info');
+    console.log('Estado de autenticación:', this.isAuthenticated());
+    console.log('Token presente:', !!this.getAuthToken());
+    console.log('Token expirado:', this.isTokenExpired());
+    console.log('URL base:', this.API_BASE_URL);
+    const token = this.getAuthToken();
+    if (token) {
+      console.log('Token preview:', `${token.substring(0, 30)}...`);
+    }
+    console.groupEnd();
+  }
 }

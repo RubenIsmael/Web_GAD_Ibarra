@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FolderOpen, Plus, Search, Filter, Calendar, User, TrendingUp, Eye, Edit, Trash2, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderOpen, Plus, Search, Filter, Calendar, User, TrendingUp, Eye, Edit, Trash2, Check, X, ChevronLeft, ChevronRight, FileText, Download, MessageSquare, Send } from 'lucide-react';
 import { ApiService } from './login/ApiService'; 
 import '../styles/proyectos.css';
 
@@ -29,6 +29,13 @@ interface ProyectoStats {
   pendientes: number;
   aprobados: number;
   rechazados: number;
+}
+
+// Nueva interfaz para documentos
+interface DocumentoProyecto {
+  certificate?: string;
+  identityDocument?: string;
+  signedDocument?: string;
 }
 
 // Función para validar y normalizar estados
@@ -110,6 +117,14 @@ const Proyectos: React.FC = () => {
   const [selectedProyecto, setSelectedProyecto] = useState<ProyectoAPI | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  
+  // *** NUEVOS ESTADOS PARA DOCUMENTOS Y OBSERVACIONES ***
+  const [showDocumentsModal, setShowDocumentsModal] = useState(false);
+  const [showObservationModal, setShowObservationModal] = useState(false);
+  const [observationText, setObservationText] = useState('');
+  const [currentDocuments, setCurrentDocuments] = useState<DocumentoProyecto>({});
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [documentError, setDocumentError] = useState<string>('');
 
   // Función unificada para verificar token
   const verificarToken = (): boolean => {
@@ -137,6 +152,153 @@ const Proyectos: React.FC = () => {
     
     console.log('✅ Token válido y no expirado');
     return true;
+  };
+
+  // *** NUEVA FUNCIÓN PARA CARGAR DOCUMENTOS ***
+  const cargarDocumentos = async (userId: string) => {
+    try {
+      if (!verificarToken()) return;
+      
+      setLoadingDocuments(true);
+      setDocumentError('');
+      
+      console.log('📄 Cargando documentos para usuario:', userId);
+      
+      // Cargar los tres documentos en paralelo
+      const [certificateResponse, identityResponse, signedResponse] = await Promise.allSettled([
+        apiService.getUserCertificate(userId),
+        apiService.getUserIdentityDocument(userId), 
+apiService.getCurrentUserCertificate()
+      ]);
+      
+      const documents: DocumentoProyecto = {};
+      
+      // Procesar certificado
+      if (certificateResponse.status === 'fulfilled' && certificateResponse.value.success) {
+        documents.certificate = certificateResponse.value.data;
+        console.log('✅ Certificado cargado');
+      } else {
+        console.warn('⚠️ Error cargando certificado:', certificateResponse);
+      }
+      
+      // Procesar documento de identidad
+      if (identityResponse.status === 'fulfilled' && identityResponse.value.success) {
+        documents.identityDocument = identityResponse.value.data;
+        console.log('✅ Documento de identidad cargado');
+      } else {
+        console.warn('⚠️ Error cargando documento de identidad:', identityResponse);
+      }
+      
+      // Procesar documento firmado
+      if (signedResponse.status === 'fulfilled' && signedResponse.value.success) {
+        documents.signedDocument = signedResponse.value.data;
+        console.log('✅ Documento firmado cargado');
+      } else {
+        console.warn('⚠️ Error cargando documento firmado:', signedResponse);
+      }
+      
+      setCurrentDocuments(documents);
+      
+      // Verificar si al menos un documento se cargó
+      const hasDocuments = Object.values(documents).some(doc => doc);
+      if (!hasDocuments) {
+        setDocumentError('No se pudieron cargar los documentos. Verifique que el usuario tenga documentos subidos.');
+      }
+      
+    } catch (err) {
+      console.error('💥 Error cargando documentos:', err);
+      setDocumentError('Error de conexión al cargar los documentos.');
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  // *** FUNCIÓN PARA ABRIR VENTANA DE DOCUMENTOS ***
+  const abrirDocumentos = async (proyecto: ProyectoAPI) => {
+    setSelectedProyecto(proyecto);
+    setShowDocumentsModal(true);
+    await cargarDocumentos(proyecto.id);
+  };
+
+  // *** FUNCIÓN PARA MANEJAR RECHAZO CON OBSERVACIÓN ***
+  const iniciarRechazo = (proyecto: ProyectoAPI) => {
+    setSelectedProyecto(proyecto);
+    setObservationText('');
+    setShowObservationModal(true);
+  };
+
+  // *** FUNCIÓN PARA ENVIAR RECHAZO CON OBSERVACIÓN ***
+  const enviarRechazo = async () => {
+    if (!selectedProyecto) return;
+    
+    if (!observationText.trim()) {
+      alert('Por favor, ingrese una observación para el rechazo.');
+      return;
+    }
+    
+    try {
+      if (!verificarToken()) return;
+      
+      setLoading(true);
+      console.log('❌ Rechazando proyecto con observación:', {
+        proyectoId: selectedProyecto.id,
+        observacion: observationText.trim()
+      });
+      
+      // Rechazar el proyecto (mantener la función original)
+      const response = await apiService.rechazarProyecto(selectedProyecto.id);
+      console.log('📡 Respuesta de rechazo:', response);
+      
+      if (response.success) {
+        console.log('✅ Proyecto rechazado exitosamente');
+        
+        // Cerrar modal de observación
+        setShowObservationModal(false);
+        setObservationText('');
+        setSelectedProyecto(null);
+        
+        // Recargar proyectos
+        await loadProyectos();
+        setTimeout(() => filtrarProyectos(), 100);
+        
+        // Mostrar mensaje de éxito
+        alert('Mensaje enviado. El proyecto ha sido rechazado con la observación correspondiente.');
+        
+      } else {
+        console.error('❌ Error al rechazar:', response.error);
+        if (response.status === 401) {
+          setError('Su sesión ha expirado. Recargue la página e inicie sesión nuevamente.');
+          apiService.clearToken();
+        } else if (response.status === 403) {
+          alert('No tiene permisos para rechazar proyectos');
+        } else if (response.status === 404) {
+          alert('Proyecto no encontrado o endpoint no disponible');
+        } else {
+          alert(response.error || 'Error al rechazar proyecto');
+        }
+      }
+    } catch (err) {
+      console.error('💥 Error de conexión al rechazar proyecto:', err);
+      alert('Error de conexión al rechazar proyecto');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // *** FUNCIÓN PARA DESCARGAR DOCUMENTO ***
+  const descargarDocumento = (documentData: string, filename: string) => {
+    try {
+      // Crear un enlace temporal para descargar
+      const link = document.createElement('a');
+      link.href = `data:application/octet-stream;base64,${documentData}`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Error descargando documento:', err);
+      alert('Error al descargar el documento');
+    }
   };
 
   // Cargar proyectos con verificación de token mejorada
@@ -343,44 +505,6 @@ const Proyectos: React.FC = () => {
     } catch (err) {
       console.error('💥 Error de conexión al aprobar proyecto:', err);
       alert('Error de conexión al aprobar proyecto');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Rechazar proyecto con verificación mejorada
-  const rechazarProyecto = async (userId: string) => {
-    try {
-      if (!verificarToken()) return;
-      
-      setLoading(true);
-      console.log('❌ Rechazando proyecto:', userId);
-      
-      const response = await apiService.rechazarProyecto(userId);
-      console.log('📡 Respuesta de rechazo:', response);
-      
-      if (response.success) {
-        console.log('✅ Proyecto rechazado exitosamente');
-        await loadProyectos();
-        // Actualizar estadísticas inmediatamente
-        setTimeout(() => filtrarProyectos(), 100);
-        alert('Proyecto rechazado exitosamente');
-      } else {
-        console.error('❌ Error al rechazar:', response.error);
-        if (response.status === 401) {
-          setError('Su sesión ha expirado. Recargue la página e inicie sesión nuevamente.');
-          apiService.clearToken();
-        } else if (response.status === 403) {
-          alert('No tiene permisos para rechazar proyectos');
-        } else if (response.status === 404) {
-          alert('Proyecto no encontrado o endpoint no disponible');
-        } else {
-          alert(response.error || 'Error al rechazar proyecto');
-        }
-      }
-    } catch (err) {
-      console.error('💥 Error de conexión al rechazar proyecto:', err);
-      alert('Error de conexión al rechazar proyecto');
     } finally {
       setLoading(false);
     }
@@ -669,23 +793,15 @@ const Proyectos: React.FC = () => {
             <div className="proyectos-card-footer">
               {estadoProyecto === 'pendiente' ? (
                 <>
+                  {/* *** BOTÓN ABRIR REEMPLAZA APROBAR/RECHAZAR *** */}
                   <button 
-                    onClick={() => aprobarProyecto(proyecto.id)}
-                    className="proyectos-action-button bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => abrirDocumentos(proyecto)}
+                    className="proyectos-action-button bg-blue-600 hover:bg-blue-700 text-white"
                     disabled={loading || !apiService.isAuthenticated()}
-                    title="Aprobar proyecto"
+                    title="Abrir documentos del proyecto"
                   >
-                    <Check className="w-4 h-4" />
-                    <span>Aprobar</span>
-                  </button>
-                  <button 
-                    onClick={() => rechazarProyecto(proyecto.id)}
-                    className="proyectos-action-button bg-red-600 hover:bg-red-700 text-white"
-                    disabled={loading || !apiService.isAuthenticated()}
-                    title="Rechazar proyecto"
-                  >
-                    <X className="w-4 h-4" />
-                    <span>Rechazar</span>
+                    <FileText className="w-4 h-4" />
+                    <span>Abrir</span>
                   </button>
                 </>
               ) : (
@@ -1260,6 +1376,334 @@ const Proyectos: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* *** MODAL PARA VER DOCUMENTOS *** */}
+      {showDocumentsModal && selectedProyecto && (
+        <div className="proyectos-modal-overlay">
+          <div className="proyectos-modal max-w-4xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="proyectos-modal-title">
+                Documentos del Proyecto: {selectedProyecto.nombre}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowDocumentsModal(false);
+                  setSelectedProyecto(null);
+                  setCurrentDocuments({});
+                  setDocumentError('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Información del proyecto */}
+            <div className="bg-gray-50 p-4 rounded-lg mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-gray-700">Email:</span>
+                  <p className="text-gray-900">{selectedProyecto.email || 'No especificado'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Cédula:</span>
+                  <p className="text-gray-900">{selectedProyecto.cedula || 'No especificado'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Estado:</span>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedProyecto.estado)}`}>
+                    {formatEstadoText(selectedProyecto.estado)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Error al cargar documentos */}
+            {documentError && (
+              <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+                <div className="flex items-center">
+                  <span className="text-lg mr-2">⚠️</span>
+                  <span>{documentError}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Indicador de carga de documentos */}
+            {loadingDocuments && (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-gray-600">Cargando documentos...</span>
+              </div>
+            )}
+
+            {/* Documentos */}
+            {!loadingDocuments && (
+              <div className="space-y-4 mb-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Documentos Disponibles</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Certificado */}
+                  <div className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center">
+                        <FileText className="w-5 h-5 text-blue-600 mr-2" />
+                        <span className="font-medium text-gray-900">Certificado</span>
+                      </div>
+                      {currentDocuments.certificate && (
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          Disponible
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Certificado oficial del proyecto
+                    </p>
+                    {currentDocuments.certificate ? (
+                      <button
+                        onClick={() => descargarDocumento(currentDocuments.certificate!, `certificado_${selectedProyecto.id}.pdf`)}
+                        className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors flex items-center justify-center"
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Descargar
+                      </button>
+                    ) : (
+                      <div className="w-full bg-gray-100 text-gray-500 px-3 py-2 rounded text-sm text-center">
+                        No disponible
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Documento de Identidad */}
+                  <div className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center">
+                        <FileText className="w-5 h-5 text-green-600 mr-2" />
+                        <span className="font-medium text-gray-900">Cédula</span>
+                      </div>
+                      {currentDocuments.identityDocument && (
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          Disponible
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Documento de identidad escaneado
+                    </p>
+                    {currentDocuments.identityDocument ? (
+                      <button
+                        onClick={() => descargarDocumento(currentDocuments.identityDocument!, `cedula_${selectedProyecto.id}.jpg`)}
+                        className="w-full bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 transition-colors flex items-center justify-center"
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Descargar
+                      </button>
+                    ) : (
+                      <div className="w-full bg-gray-100 text-gray-500 px-3 py-2 rounded text-sm text-center">
+                        No disponible
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Documento Firmado */}
+                  <div className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center">
+                        <FileText className="w-5 h-5 text-purple-600 mr-2" />
+                        <span className="font-medium text-gray-900">Documento Firmado</span>
+                      </div>
+                      {currentDocuments.signedDocument && (
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          Disponible
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">
+                      PDF con aprobaciones firmadas
+                    </p>
+                    {currentDocuments.signedDocument ? (
+                      <button
+                        onClick={() => descargarDocumento(currentDocuments.signedDocument!, `documento_firmado_${selectedProyecto.id}.pdf`)}
+                        className="w-full bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 transition-colors flex items-center justify-center"
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Descargar
+                      </button>
+                    ) : (
+                      <div className="w-full bg-gray-100 text-gray-500 px-3 py-2 rounded text-sm text-center">
+                        No disponible
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Botones de acción */}
+            <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowDocumentsModal(false);
+                  setSelectedProyecto(null);
+                  setCurrentDocuments({});
+                  setDocumentError('');
+                }}
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition-colors"
+              >
+                Cerrar
+              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDocumentsModal(false);
+                    iniciarRechazo(selectedProyecto);
+                  }}
+                  className="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 transition-colors flex items-center"
+                  disabled={loading}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Rechazar
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowDocumentsModal(false);
+                    aprobarProyecto(selectedProyecto.id);
+                  }}
+                  className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 transition-colors flex items-center"
+                  disabled={loading}
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Aprobar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* *** MODAL PARA OBSERVACIONES DE RECHAZO *** */}
+      {showObservationModal && selectedProyecto && (
+        <div className="proyectos-modal-overlay">
+          <div className="proyectos-modal max-w-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="proyectos-modal-title text-red-600">
+                <MessageSquare className="inline w-6 h-6 mr-2" />
+                Rechazar Proyecto: {selectedProyecto.nombre}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowObservationModal(false);
+                  setSelectedProyecto(null);
+                  setObservationText('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Información del proyecto */}
+            <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-6">
+              <div className="flex items-center mb-2">
+                <span className="text-red-600 font-medium">Proyecto a rechazar:</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="font-medium text-gray-700">Email:</span>
+                  <p className="text-gray-900">{selectedProyecto.email || 'No especificado'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Cédula:</span>
+                  <p className="text-gray-900">{selectedProyecto.cedula || 'No especificado'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Formulario de observación */}
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              enviarRechazo();
+            }}>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Observación del Rechazo *
+                  <span className="text-xs text-gray-500 ml-1">(Máximo 500 caracteres)</span>
+                </label>
+                <textarea
+                  value={observationText}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 500) {
+                      setObservationText(e.target.value);
+                    }
+                  }}
+                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                  rows={8}
+                  placeholder="Ingrese las razones del rechazo, observaciones sobre la documentación, o mejoras requeridas..."
+                  required
+                  disabled={loading}
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-xs text-gray-500">
+                    Mínimo 10 caracteres requeridos
+                  </span>
+                  <span className={`text-xs ${observationText.length > 450 ? 'text-red-600' : 'text-gray-500'}`}>
+                    {observationText.length}/500 caracteres
+                  </span>
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowObservationModal(false);
+                    setSelectedProyecto(null);
+                    setObservationText('');
+                  }}
+                  className="bg-gray-300 text-gray-700 px-6 py-2 rounded hover:bg-gray-400 transition-colors"
+                  disabled={loading}
+                >
+                  Cancelar
+                </button>
+                
+                <button
+                  type="submit"
+                  className="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={loading || observationText.trim().length < 10}
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      Enviar Rechazo
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {/* Información adicional */}
+            <div className="mt-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-start">
+                <span className="text-yellow-600 mr-2">💡</span>
+                <div className="text-sm text-yellow-800">
+                  <p className="font-medium mb-1">Importante:</p>
+                  <p>
+                    El usuario recibirá una notificación con su observación. 
+                    Sea específico sobre los cambios requeridos para facilitar la corrección del proyecto.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
